@@ -1,8 +1,5 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Kariyer.Mail.Api/Kariyer.Mail.Api.csproj" />
-    <Project Path="src/Kariyer.Mail.Application/Kariyer.Mail.Application.csproj" />
-    <Project Path="src/Kariyer.Mail.Domain/Kariyer.Mail.Domain.csproj" />
-    <Project Path="src/Kariyer.Mail.Infrastructure/Kariyer.Mail.Infrastructure.csproj" />
   </Folder>
 </Solution>
