@@ -79,6 +79,26 @@ builder.Services.AddEndpoints(typeof(Program).Assembly);
 
 var app = builder.Build();
 
+using (IServiceScope scope = app.Services.CreateScope())
+{
+    ILogger<Program> logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        logger.LogInformation("Attempting to apply Entity Framework migrations...");
+
+        MailDbContext dbContext = scope.ServiceProvider.GetRequiredService<MailDbContext>();
+
+        dbContext.Database.Migrate();
+
+        logger.LogInformation("Database migration completed successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "CRITICAL: Database migration failed. The application will crash.");
+        throw;
+    }
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi(); 
