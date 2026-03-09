@@ -1,41 +1,103 @@
+using Kariyer.Mail.Api.Common.Configuration;
+using Kariyer.Mail.Api.Common.Messaging;
+using Kariyer.Mail.Api.Common.Persistence;
+using Kariyer.Mail.Api.Common.Providers;
+using Kariyer.Mail.Api.Common.Telemetry;
+using Kariyer.Mail.Api.Common.Web;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
+using FluentValidation;
+using StackExchange.Redis;
+using Kariyer.Mail.Api.Common.Web.Errors;
+using Hangfire;
+using Hangfire.PostgreSql;
+using Scalar.AspNetCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.Configure<RouteOptions>(options =>
+{
+    options.ConstraintMap.Add("ulid", typeof(UlidRouteConstraint));
+});
+
+builder.AddObservability();
+
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
+builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
+
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+builder.Services.Configure<LegacyBackendSettings>(builder.Configuration.GetSection("LegacySystem"));
+builder.Services.Configure<DispatcherSettings>(builder.Configuration.GetSection("Dispatcher"));
+builder.Services.AddEmailProviderClient(builder.Configuration);
+
+builder.Services.AddOpenApi("v1", options =>
+{
+    options.AddDocumentTransformer((document, context, ct) =>
+    {
+        document.Info = new Microsoft.OpenApi.OpenApiInfo
+        {
+            Title = "Kariyer.Mail.Api",
+            Version = "v1",
+            Description = "Enterprise Mass Dispatch and Scheduling Engine for Kariyer Zamanı",
+            Contact = new Microsoft.OpenApi.OpenApiContact
+            {
+                Name = "Core Engineering Team"
+            }
+        };
+        return Task.CompletedTask;
+    });
+});
+
+string dbConn = builder.Configuration.GetConnectionString("Postgres")
+    ?? throw new InvalidOperationException("DB connection missing.");
+
+string rabbitMqConn = builder.Configuration.GetConnectionString("RabbitMQ")
+    ?? throw new InvalidOperationException("RabbitMQ connection missing.");
+    
+string garnetConn = builder.Configuration.GetConnectionString("Garnet") 
+    ?? throw new InvalidOperationException("Garnet connection string missing.");
+    
+builder.Services.AddDbContext<MailDbContext>(opts => opts.UseNpgsql(dbConn));
+builder.Services.AddMessaging(rabbitMqConn);
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(garnetConn));
+
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UsePostgreSqlStorage(c => c.UseNpgsqlConnection(dbConn)));
+
+builder.Services.AddHangfireServer(options =>
+{
+    options.WorkerCount = Environment.ProcessorCount * 2;
+});
+
+builder.Services.AddEndpoints(typeof(Program).Assembly);
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi(); 
+
+    app.MapScalarApiReference(options => 
+    {
+        options
+            .WithTitle("Kariyer Mail API Reference")
+            .WithTheme(ScalarTheme.Mars)
+            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 }
 
+app.UseExceptionHandler();
+app.UseSerilogRequestLogging();
+app.UseHangfireDashboard("/hangfire");
+app.MapPrometheusScrapingEndpoint();
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.MapEndpoints();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
