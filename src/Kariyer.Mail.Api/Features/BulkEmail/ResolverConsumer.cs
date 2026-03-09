@@ -121,13 +121,16 @@ internal sealed class ResolverConsumer : IConsumer<StartBulkEmailJobCommand>
                         // legacy API can return names, or any other thing, so we will add them here: { "Name", target.Name }
                     };
 
-                    dispatchCommands.Add(new DispatchEmailCommand(
-                        command.JobId, 
-                        target.Id, 
-                        target.RecipientEmail, 
-                        finalSubjectTemplate, 
-                        finalBodyTemplate, 
-                        templateData));
+                    dispatchCommands.Add(new DispatchEmailCommand (){
+                        JobId = command.JobId,
+                        TargetId = target.Id,
+                        Email = target.RecipientEmail,
+                        Subject = finalSubjectTemplate,
+                        RawTemplate = finalBodyTemplate,
+                        TemplateData = templateData
+                    });
+                    
+                    
                 }
 
                 await context.PublishBatch(dispatchCommands, context.CancellationToken);

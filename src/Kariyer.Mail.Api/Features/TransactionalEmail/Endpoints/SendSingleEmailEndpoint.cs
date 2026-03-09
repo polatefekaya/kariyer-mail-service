@@ -29,9 +29,9 @@ internal sealed class SendSingleEmailEndpoint : IEndpoint
 
             IDatabase garnet = multiplexer.GetDatabase();
             bool isFirstRequest = await garnet.StringSetAsync(
-                $"idempotency:tx:{idempotencyKey}", 
-                "locked", 
-                TimeSpan.FromHours(24), 
+                $"idempotency:tx:{idempotencyKey}",
+                "locked",
+                TimeSpan.FromHours(24),
                 When.NotExists);
 
             if (!isFirstRequest)
@@ -75,19 +75,19 @@ internal sealed class SendSingleEmailEndpoint : IEndpoint
             await dbContext.EmailTargets.AddAsync(target, ct);
 
             Dictionary<string, string> templateData = request.TemplateData ?? new Dictionary<string, string>();
-            if (!templateData.ContainsKey("Email")) 
+            if (!templateData.ContainsKey("Email"))
             {
                 templateData.Add("Email", target.RecipientEmail);
             }
 
-            DispatchEmailCommand command = new (
-                JobId: null,
-                TargetId: target.Id,
-                Email: target.RecipientEmail,
-                Subject: finalSubject,
-                RawTemplate: finalBody,
-                TemplateData: templateData
-            );
+            DispatchEmailCommand command = new (){
+                JobId = null,
+                TargetId = target.Id,
+                Email = target.RecipientEmail,
+                Subject = finalSubject,
+                RawTemplate = finalBody,
+                TemplateData = templateData
+            };
 
             await publishEndpoint.Publish(command, ct);
 

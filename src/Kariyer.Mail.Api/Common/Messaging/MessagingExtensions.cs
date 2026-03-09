@@ -20,7 +20,7 @@ public static class MessagingExtensions
             });
 
             x.AddConsumer<ResolverConsumer>();
-            x.AddConsumer<DispatchEmailBatchConsumer>();
+            x.AddConsumer<DispatchEmailConsumer>();
             
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -52,7 +52,7 @@ public static class MessagingExtensions
                         b.ConcurrencyLimit = dispatcherConfig.ConcurrencyLimit;
                     });
                     
-                    e.ConfigureConsumer<DispatchEmailBatchConsumer>(context);
+                    e.ConfigureConsumer<DispatchEmailConsumer>(context);
                 });
                 
                 cfg.ConfigureEndpoints(context);

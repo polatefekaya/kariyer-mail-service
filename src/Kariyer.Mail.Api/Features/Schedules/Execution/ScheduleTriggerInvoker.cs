@@ -5,7 +5,6 @@ using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Features.BulkEmail;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
-
 namespace Kariyer.Mail.Api.Features.Schedules.Execution;
 
 public sealed class ScheduleTriggerInvoker
@@ -44,7 +43,7 @@ public sealed class ScheduleTriggerInvoker
 
             activity?.SetTag("job.type", scheduleBlueprint.JobType.ToString());
 
-            EmailJob freshJobExecution = new (
+            EmailJob freshJobExecution = new EmailJob(
                 adminId: scheduleBlueprint.AdminId,
                 type: scheduleBlueprint.JobType,
                 templateId: scheduleBlueprint.TemplateId,
@@ -56,7 +55,12 @@ public sealed class ScheduleTriggerInvoker
 
             await dbContext.EmailJobs.AddAsync(freshJobExecution);
 
-            StartBulkEmailJobCommand command = new StartBulkEmailJobCommand(freshJobExecution.Id);
+            StartBulkEmailJobCommand command = new()
+            {
+                JobId = freshJobExecution.Id,
+                TemplateId = scheduleBlueprint.TemplateId
+            };
+            
             await publishEndpoint.Publish(command);
 
             await dbContext.SaveChangesAsync();
