@@ -34,9 +34,17 @@ internal sealed class GetAllTemplatesEndpoint : IEndpoint
                 query = query.Where(t => !t.IsArchived);
             }
 
-            List<TemplateSummaryDto> templates = await query
-                .Select(t => new TemplateSummaryDto(t.Id, t.Name, t.IsArchived, t.CreatedAt, t.UpdatedAt))
-                .OrderByDescending(t => t.CreatedAt)
+            List<TemplateSummaryDto> templates = await dbContext.EmailTemplates
+                .AsNoTracking()
+                .Where(e => !e.IsArchived)
+                .OrderByDescending(e => e.CreatedAt)
+                .Select(e => new TemplateSummaryDto(
+                    e.Id, 
+                    e.Name, 
+                    e.IsArchived, 
+                    e.CreatedAt, 
+                    e.UpdatedAt
+                ))
                 .ToListAsync(ct);
                 
             string serializedData = JsonSerializer.Serialize(templates);

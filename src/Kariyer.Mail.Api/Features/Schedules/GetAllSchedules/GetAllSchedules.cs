@@ -34,11 +34,20 @@ internal sealed class GetAllSchedulesEndpoint : IEndpoint
                 query = query.Where(s => s.IsActive);
             }
 
-            List<ScheduleSummaryDto> schedules = await query
-                .Select(s => new ScheduleSummaryDto(
-                    s.Id, s.Name, s.JobType.ToString(), s.IsRecurring, 
-                    s.CronExpression, s.OneTimeExecuteAt, s.IsActive, s.CreatedAt))
-                .OrderByDescending(s => s.CreatedAt)
+            List<ScheduleSummaryDto> schedules = await dbContext.EmailJobSchedules
+                .AsNoTracking()
+                .Where(e => e.IsActive)
+                .OrderByDescending(e => e.CreatedAt) 
+                .Select(e => new ScheduleSummaryDto( 
+                    e.Id, 
+                    e.Name, 
+                    e.JobType.ToString(), 
+                    e.IsRecurring, 
+                    e.CronExpression, 
+                    e.OneTimeExecuteAt, 
+                    e.IsActive, 
+                    e.CreatedAt
+                ))
                 .ToListAsync(ct);
 
             string serializedData = JsonSerializer.Serialize(schedules);
