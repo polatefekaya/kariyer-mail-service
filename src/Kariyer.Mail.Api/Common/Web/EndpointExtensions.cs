@@ -22,7 +22,7 @@ public static class EndpointExtensions
     {
         IEnumerable<IEndpoint> endpoints = app.Services.GetRequiredService<IEnumerable<IEndpoint>>();
 
-        RouteGroupBuilder apiGroup = app.MapGroup("/mail");
+        RouteGroupBuilder apiGroup = app.MapGroup("/api/mail");
 
         foreach (IEndpoint endpoint in endpoints)
         {

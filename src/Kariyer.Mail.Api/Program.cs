@@ -133,7 +133,7 @@ app.UseCors("MailCorsPolicy");
 app.UseSerilogRequestLogging();
 app.UseHangfireDashboard("/hangfire");
 app.MapPrometheusScrapingEndpoint();
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.MapEndpoints();
 
