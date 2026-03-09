@@ -23,7 +23,7 @@ internal sealed class GetAllTemplatesEndpoint : IEndpoint
         {
             using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("GetAllTemplates");
             
-            string cacheKey = $"templates:all:archived_{includeArchived ?? false}";
+            string cacheKey = $"templates:all:archived_{(includeArchived ?? false).ToString().ToLowerInvariant()}";
             activity?.SetTag("cache.key", cacheKey);
 
             IDatabase garnet = multiplexer.GetDatabase();

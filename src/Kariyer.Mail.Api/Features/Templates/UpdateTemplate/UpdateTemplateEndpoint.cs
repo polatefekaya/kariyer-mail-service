@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using Kariyer.Mail.Api.Common.Models;
 using Kariyer.Mail.Api.Common.Persistence;
+using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Common.Web;
 using Kariyer.Mail.Api.Common.Web.Filters;
 using Microsoft.EntityFrameworkCore;
@@ -16,17 +18,26 @@ internal sealed class UpdateTemplateEndpoint : IEndpoint
             UpdateTemplateRequest request,
             MailDbContext dbContext,
             IConnectionMultiplexer multiplexer,
+            ILogger<UpdateTemplateEndpoint> logger,
             CancellationToken ct) =>
         {
+            using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("UpdateTemplate");
+            activity?.SetTag("template.id", id.ToString());
+
             IDatabase garnet = multiplexer.GetDatabase();
             
             EmailTemplate? template = await dbContext.EmailTemplates
                 .FirstOrDefaultAsync(t => t.Id == id, ct);
 
-            if (template == null) return Results.NotFound();
+            if (template == null) 
+            {
+                logger.LogWarning("Update failed: Template [{TemplateId}] not found.", id);
+                return Results.NotFound();
+            }
             
             if (template.IsArchived)
             {
+                logger.LogWarning("Update rejected: Attempted to mutate archived Template [{TemplateId}].", id);
                 return Results.BadRequest(new { Message = "Cannot update an archived template. Unarchive it first." });
             }
 
@@ -34,6 +45,7 @@ internal sealed class UpdateTemplateEndpoint : IEndpoint
 
             if (isLockedByPastJobs)
             {
+                logger.LogWarning("Update rejected: Template [{TemplateId}] is locked because it is referenced by a historical Email Job.", id);
                 return Results.Conflict(new 
                 { 
                     Message = "This template has already been used in an active or historical email job. " +
@@ -48,6 +60,8 @@ internal sealed class UpdateTemplateEndpoint : IEndpoint
             await garnet.KeyDeleteAsync("templates:all:archived_false");
             await garnet.KeyDeleteAsync("templates:all:archived_true");
             await garnet.KeyDeleteAsync($"template:detail:{id}");
+
+            logger.LogInformation("Template [{TemplateId}] successfully updated and caches invalidated.", id);
 
             return Results.NoContent();
         })

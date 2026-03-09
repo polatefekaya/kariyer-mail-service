@@ -22,7 +22,7 @@ internal sealed class GetAllSchedulesEndpoint : IEndpoint
         {
             using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("GetAllSchedules");
             
-            string cacheKey = $"schedules:all:inactive_{includeInactive ?? false}";
+            string cacheKey = $"schedules:all:inactive_{(includeInactive ?? false).ToString().ToLowerInvariant()}";
             activity?.SetTag("cache.key", cacheKey);
             
             IDatabase garnet = multiplexer.GetDatabase();
