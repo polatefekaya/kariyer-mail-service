@@ -75,6 +75,22 @@ builder.Services.AddHangfireServer(options =>
     options.WorkerCount = Environment.ProcessorCount * 2;
 });
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("MailCorsPolicy", policy =>
+    {
+        policy.WithOrigins(
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://localhost:5173",
+                "https://kz-admin.kariyerzamani.com"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
+
 builder.Services.AddEndpoints(typeof(Program).Assembly);
 
 var app = builder.Build();
@@ -113,6 +129,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseExceptionHandler();
+app.UseCors("MailCorsPolicy");
 app.UseSerilogRequestLogging();
 app.UseHangfireDashboard("/hangfire");
 app.MapPrometheusScrapingEndpoint();
