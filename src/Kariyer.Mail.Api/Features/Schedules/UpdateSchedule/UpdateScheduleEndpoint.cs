@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using Hangfire;
 using Kariyer.Mail.Api.Common.Models;
 using Kariyer.Mail.Api.Common.Persistence;
+using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Common.Web;
 using Kariyer.Mail.Api.Features.Schedules.Execution;
 using Microsoft.EntityFrameworkCore;
@@ -19,12 +21,20 @@ internal sealed class UpdateScheduleEndpoint : IEndpoint
             IBackgroundJobClient backgroundJobs,
             IRecurringJobManager recurringJobs,
             IConnectionMultiplexer multiplexer,
+            ILogger<UpdateScheduleEndpoint> logger,
             CancellationToken ct) =>
         {
+            using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("UpdateSchedule");
+            activity?.SetTag("schedule.id", id.ToString());
+
             EmailJobSchedule? schedule = await dbContext.EmailJobSchedules
                 .FirstOrDefaultAsync(s => s.Id == id && s.IsActive, ct);
 
-            if (schedule == null) return Results.NotFound();
+            if (schedule == null) 
+            {
+                logger.LogWarning("Update failed: Schedule [{ScheduleId}] not found or inactive.", id);
+                return Results.NotFound();
+            }
 
             schedule.Update(
                 request.Name, request.TemplateId, request.Subject, 
@@ -46,6 +56,8 @@ internal sealed class UpdateScheduleEndpoint : IEndpoint
                     recurringJobId: hangfireJobId,
                     methodCall: invoker => invoker.ExecuteScheduleAsync(schedule.Id),
                     cronExpression: schedule.CronExpression);
+                    
+                logger.LogInformation("Updated Schedule [{ScheduleId}] - Re-registered as recurring with CRON: {CronExpression}", id, schedule.CronExpression);
             }
             else
             {
@@ -56,6 +68,12 @@ internal sealed class UpdateScheduleEndpoint : IEndpoint
                     backgroundJobs.Schedule<ScheduleTriggerInvoker>(
                         methodCall: invoker => invoker.ExecuteScheduleAsync(schedule.Id),
                         enqueueAt: schedule.OneTimeExecuteAt.Value);
+                        
+                    logger.LogInformation("Updated Schedule [{ScheduleId}] - Converted to one-time execution at: {ExecuteAt}", id, schedule.OneTimeExecuteAt.Value);
+                }
+                else 
+                {
+                    logger.LogWarning("Updated Schedule [{ScheduleId}] - Hangfire trigger removed due to missing CRON or Date.", id);
                 }
             }
 

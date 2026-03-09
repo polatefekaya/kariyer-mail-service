@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using Kariyer.Mail.Api.Common.Models;
 using Kariyer.Mail.Api.Common.Persistence;
+using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Common.Web;
 using Kariyer.Mail.Api.Features.BulkEmail.Contracts;
 using Microsoft.EntityFrameworkCore;
@@ -15,9 +17,13 @@ internal sealed class GetAllJobStatusEndpoint : IEndpoint
             int? limit,
             MailDbContext dbContext,
             IConnectionMultiplexer multiplexer,
+            ILogger<GetAllJobStatusEndpoint> logger,
             CancellationToken ct) =>
         {
+            using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("GetAllJobStatuses");
             int take = limit ?? 50;
+            activity?.SetTag("query.limit", take);
+
             List<EmailJob> jobs = await dbContext.EmailJobs
                 .AsNoTracking()
                 .OrderByDescending(j => j.CreatedAt)
@@ -26,11 +32,11 @@ internal sealed class GetAllJobStatusEndpoint : IEndpoint
 
             if (jobs.Count == 0)
             {
+                logger.LogDebug("Job history requested, but database is empty.");
                 return Results.Ok(new List<JobStatusResponseDto>());
             }
 
             IDatabase garnet = multiplexer.GetDatabase();
-
             RedisKey[] redisKeys = new RedisKey[jobs.Count * 3];
             
             for (int i = 0; i < jobs.Count; i++)
@@ -42,7 +48,6 @@ internal sealed class GetAllJobStatusEndpoint : IEndpoint
             }
 
             RedisValue[] redisValues = await garnet.StringGetAsync(redisKeys);
-
             List<JobStatusResponseDto> response = new List<JobStatusResponseDto>(jobs.Count);
             
             for (int i = 0; i < jobs.Count; i++)
@@ -53,7 +58,7 @@ internal sealed class GetAllJobStatusEndpoint : IEndpoint
                 RedisValue sentVal = redisValues[(i * 3) + 1];
                 RedisValue failedVal = redisValues[(i * 3) + 2];
 
-                JobMetricsDto metrics = new (
+                JobMetricsDto metrics = new(
                     TotalResolved: resolvedVal.HasValue ? (long)resolvedVal : 0,
                     SuccessfullySent: sentVal.HasValue ? (long)sentVal : 0,
                     FailedToDrop: failedVal.HasValue ? (long)failedVal : 0
@@ -70,6 +75,7 @@ internal sealed class GetAllJobStatusEndpoint : IEndpoint
                 ));
             }
 
+            logger.LogInformation("Returned {JobCount} historical jobs with Garnet metrics attached.", jobs.Count);
             return Results.Ok(response);
         })
         .WithTags("Bulk Email");
