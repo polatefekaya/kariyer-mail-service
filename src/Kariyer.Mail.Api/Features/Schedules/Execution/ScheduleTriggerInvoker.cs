@@ -18,17 +18,23 @@ public sealed class ScheduleTriggerInvoker
         _logger = logger;
     }
 
-    public async Task ExecuteScheduleAsync(Ulid scheduleId)
+    public async Task ExecuteScheduleAsync(string scheduleIdString)
     {
         using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ExecuteScheduledJob");
-        activity?.SetTag("schedule.id", scheduleId);
+
+        if (!Ulid.TryParse(scheduleIdString, out Ulid scheduleId))
+        {
+            _logger.LogError("Hangfire provided an invalid Ulid string: {ScheduleIdString}", scheduleIdString);
+            return;
+        }
+
+        activity?.SetTag("schedule.id", scheduleId.ToString());
 
         _logger.LogInformation("Hangfire triggered scheduled execution for Blueprint [{ScheduleId}].", scheduleId);
-        
+
         using IServiceScope scope = _scopeFactory.CreateScope();
         MailDbContext dbContext = scope.ServiceProvider.GetRequiredService<MailDbContext>();
         IPublishEndpoint publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
-
         try
         {
             EmailJobSchedule? scheduleBlueprint = await dbContext.EmailJobSchedules
@@ -60,8 +66,14 @@ public sealed class ScheduleTriggerInvoker
                 JobId = freshJobExecution.Id,
                 TemplateId = scheduleBlueprint.TemplateId
             };
-            
+
             await publishEndpoint.Publish(command);
+
+            if (!scheduleBlueprint.IsRecurring)
+            {
+                scheduleBlueprint.Deactivate();
+                _logger.LogInformation("One-time schedule [{ScheduleId}] has been fulfilled and marked inactive.", scheduleId);
+            }
 
             await dbContext.SaveChangesAsync();
 
@@ -69,8 +81,8 @@ public sealed class ScheduleTriggerInvoker
             DiagnosticsConfig.ScheduledJobsTriggeredCounter.Add(1, metricTag);
 
             activity?.SetStatus(ActivityStatusCode.Ok);
-            
-            _logger.LogInformation("Successfully stamped Job [{JobId}] from Schedule [{ScheduleId}]. Handed off to MassTransit.", 
+
+            _logger.LogInformation("Successfully stamped Job [{JobId}] from Schedule [{ScheduleId}]. Handed off to MassTransit.",
                 freshJobExecution.Id, scheduleId);
         }
         catch (Exception ex)
@@ -79,8 +91,8 @@ public sealed class ScheduleTriggerInvoker
             activity?.AddException(ex);
 
             _logger.LogError(ex, "Catastrophic failure while attempting to execute Schedule [{ScheduleId}].", scheduleId);
-            
-            throw; 
+
+            throw;
         }
     }
 }

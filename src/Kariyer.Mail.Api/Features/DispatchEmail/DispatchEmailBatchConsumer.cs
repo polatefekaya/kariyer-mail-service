@@ -7,6 +7,7 @@ using Kariyer.Mail.Api.Features.DispatchEmail.Providers;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Scriban;
+using Scriban.Runtime;
 using StackExchange.Redis;
 
 namespace Kariyer.Mail.Api.Features.DispatchEmail;
@@ -63,8 +64,20 @@ internal sealed class DispatchEmailConsumer : IConsumer<DispatchEmailCommand>
 
         if (cmd.TemplateData != null && cmd.TemplateData.Count > 0)
         {
-            finalSubject = await compiledSubject.RenderAsync(cmd.TemplateData);
-            finalBody = await compiledBody.RenderAsync(cmd.TemplateData);
+            ScriptObject scriptObject = new ();
+            scriptObject.Import(cmd.TemplateData);
+        
+            TemplateContext templateContext = new()
+            {
+                MemberRenamer = member => member.Name,
+                MemberFilter = null, 
+                StrictVariables = false 
+            };
+            
+            templateContext.PushGlobal(scriptObject);
+        
+            finalSubject = await compiledSubject.RenderAsync(templateContext);
+            finalBody = await compiledBody.RenderAsync(templateContext);
         }
 
         TargetStatus finalStatus;

@@ -27,22 +27,31 @@ internal sealed class UpdateScheduleEndpoint : IEndpoint
             using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("UpdateSchedule");
             activity?.SetTag("schedule.id", id.ToString());
 
+            if (!request.IsRecurring && request.OneTimeExecuteAt.HasValue)
+            {
+                if (request.OneTimeExecuteAt.Value < DateTimeOffset.UtcNow.AddMinutes(1))
+                {
+                    logger.LogWarning("Rejecting schedule update. Execution time {ExecutionTime} is in the past.", request.OneTimeExecuteAt.Value);
+                    return Results.BadRequest(new { Message = "Execution time must be safely in the future." });
+                }
+            }
+
             EmailJobSchedule? schedule = await dbContext.EmailJobSchedules
                 .FirstOrDefaultAsync(s => s.Id == id && s.IsActive, ct);
 
-            if (schedule == null) 
+            if (schedule == null)
             {
                 logger.LogWarning("Update failed: Schedule [{ScheduleId}] not found or inactive.", id);
                 return Results.NotFound();
             }
 
             schedule.Update(
-                request.Name, request.TemplateId, request.Subject, 
-                request.BodyTemplate, request.Filters, request.IsRecurring, 
+                request.Name, request.TemplateId, request.Subject,
+                request.BodyTemplate, request.Filters, request.IsRecurring,
                 request.CronExpression, request.OneTimeExecuteAt);
 
             await dbContext.SaveChangesAsync(ct);
-            
+
             IDatabase garnet = multiplexer.GetDatabase();
             await garnet.KeyDeleteAsync("schedules:all:inactive_false");
             await garnet.KeyDeleteAsync("schedules:all:inactive_true");
@@ -54,9 +63,14 @@ internal sealed class UpdateScheduleEndpoint : IEndpoint
             {
                 recurringJobs.AddOrUpdate<ScheduleTriggerInvoker>(
                     recurringJobId: hangfireJobId,
-                    methodCall: invoker => invoker.ExecuteScheduleAsync(schedule.Id),
-                    cronExpression: schedule.CronExpression);
-                    
+                    methodCall: invoker => invoker.ExecuteScheduleAsync(schedule.Id.ToString()),
+                    cronExpression: schedule.CronExpression,
+                    new RecurringJobOptions
+                    {
+                        TimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul")
+                    }
+                );
+
                 logger.LogInformation("Updated Schedule [{ScheduleId}] - Re-registered as recurring with CRON: {CronExpression}", id, schedule.CronExpression);
             }
             else
@@ -66,12 +80,12 @@ internal sealed class UpdateScheduleEndpoint : IEndpoint
                 if (schedule.OneTimeExecuteAt.HasValue)
                 {
                     backgroundJobs.Schedule<ScheduleTriggerInvoker>(
-                        methodCall: invoker => invoker.ExecuteScheduleAsync(schedule.Id),
+                        methodCall: invoker => invoker.ExecuteScheduleAsync(schedule.Id.ToString()),
                         enqueueAt: schedule.OneTimeExecuteAt.Value);
-                        
+
                     logger.LogInformation("Updated Schedule [{ScheduleId}] - Converted to one-time execution at: {ExecuteAt}", id, schedule.OneTimeExecuteAt.Value);
                 }
-                else 
+                else
                 {
                     logger.LogWarning("Updated Schedule [{ScheduleId}] - Hangfire trigger removed due to missing CRON or Date.", id);
                 }

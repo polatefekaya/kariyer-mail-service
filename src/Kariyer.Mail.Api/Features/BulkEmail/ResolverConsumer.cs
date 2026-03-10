@@ -105,32 +105,25 @@ internal sealed class ResolverConsumer : IConsumer<StartBulkEmailJobCommand>
                 }
 
                 List<EmailTarget> targets = new List<EmailTarget>(users.Count);
+                List<DispatchEmailCommand> dispatchCommands = new List<DispatchEmailCommand>(users.Count);
+                
                 foreach (ResolvedTarget user in users)
                 {
-                    targets.Add(new EmailTarget(job.Id, user.TargetId, user.Email, finalSubjectTemplate, finalBodyTemplate));
-                }
-
-                await _dbContext.EmailTargets.AddRangeAsync(targets, context.CancellationToken);
+                    EmailTarget dbTarget = new (job.Id, user.TargetId, user.Email, finalSubjectTemplate, finalBodyTemplate);
+                    targets.Add(dbTarget);
                 
-                List<DispatchEmailCommand> dispatchCommands = new List<DispatchEmailCommand>(targets.Count);
-                foreach (EmailTarget target in targets)
-                {
-                    Dictionary<string, string> templateData = new Dictionary<string, string>
+                    Dictionary<string, string> templateData = user.Metadata ?? new Dictionary<string, string>();
+                    
+                    templateData["Email"] = user.Email;
+                    dispatchCommands.Add(new DispatchEmailCommand()
                     {
-                        { "Email", target.RecipientEmail }
-                        // legacy API can return names, or any other thing, so we will add them here: { "Name", target.Name }
-                    };
-
-                    dispatchCommands.Add(new DispatchEmailCommand (){
                         JobId = command.JobId,
-                        TargetId = target.Id,
-                        Email = target.RecipientEmail,
+                        TargetId = dbTarget.Id,
+                        Email = dbTarget.RecipientEmail,
                         Subject = finalSubjectTemplate,
                         RawTemplate = finalBodyTemplate,
                         TemplateData = templateData
                     });
-                    
-                    
                 }
 
                 await context.PublishBatch(dispatchCommands, context.CancellationToken);

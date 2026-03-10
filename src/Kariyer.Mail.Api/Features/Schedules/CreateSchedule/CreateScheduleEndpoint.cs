@@ -24,20 +24,29 @@ internal sealed class CreateScheduleEndpoint : IEndpoint
         {
             using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("CreateSchedule");
 
-            string adminId = Ulid.NewUlid().ToString(); 
+            if (!request.IsRecurring && request.OneTimeExecuteAt.HasValue)
+            {
+                if (request.OneTimeExecuteAt.Value < DateTimeOffset.UtcNow.AddMinutes(1))
+                {
+                    logger.LogWarning("Rejecting schedule creation. Execution time {ExecutionTime} is in the past.", request.OneTimeExecuteAt.Value);
+                    return Results.BadRequest(new { Message = "Execution time must be safely in the future." });
+                }
+            }
 
-            EmailJobSchedule schedule = new (
-                request.Name, adminId, request.JobType, request.TemplateId, 
+            string adminId = Ulid.NewUlid().ToString();
+
+            EmailJobSchedule schedule = new(
+                request.Name, adminId, request.JobType, request.TemplateId,
                 request.Subject, request.BodyTemplate, request.Filters,
                 request.IsRecurring, request.CronExpression, request.OneTimeExecuteAt
             );
 
             await dbContext.EmailJobSchedules.AddAsync(schedule, ct);
             await dbContext.SaveChangesAsync(ct);
-            
+
             activity?.SetTag("schedule.id", schedule.Id.ToString());
             activity?.SetTag("schedule.is_recurring", schedule.IsRecurring);
-            
+
             IDatabase garnet = multiplexer.GetDatabase();
             await garnet.KeyDeleteAsync("schedules:all:inactive_false");
             await garnet.KeyDeleteAsync("schedules:all:inactive_true");
@@ -46,20 +55,24 @@ internal sealed class CreateScheduleEndpoint : IEndpoint
             {
                 recurringJobs.AddOrUpdate<ScheduleTriggerInvoker>(
                     recurringJobId: schedule.Id.ToString(),
-                    methodCall: invoker => invoker.ExecuteScheduleAsync(schedule.Id),
-                    cronExpression: schedule.CronExpression);
-                    
+                    methodCall: invoker => invoker.ExecuteScheduleAsync(schedule.Id.ToString()),
+                    cronExpression: schedule.CronExpression,
+                    new RecurringJobOptions
+                    {
+                        TimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul")
+                    });
+
                 logger.LogInformation("Created recurring schedule [{ScheduleId}] with CRON: {CronExpression}", schedule.Id, schedule.CronExpression);
             }
             else if (!schedule.IsRecurring && schedule.OneTimeExecuteAt.HasValue)
             {
                 backgroundJobs.Schedule<ScheduleTriggerInvoker>(
-                    methodCall: invoker => invoker.ExecuteScheduleAsync(schedule.Id),
+                    methodCall: invoker => invoker.ExecuteScheduleAsync(schedule.Id.ToString()),
                     enqueueAt: schedule.OneTimeExecuteAt.Value);
-                    
+
                 logger.LogInformation("Created one-time schedule [{ScheduleId}] set to execute at: {ExecuteAt}", schedule.Id, schedule.OneTimeExecuteAt.Value);
             }
-            else 
+            else
             {
                 logger.LogWarning("Schedule [{ScheduleId}] was saved to DB, but no Hangfire trigger was configured due to missing CRON or Execution Date.", schedule.Id);
             }
