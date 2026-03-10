@@ -47,7 +47,7 @@ public static class HttpExtensions
         {
             client.BaseAddress = new Uri(legacyBaseUrl);
             client.Timeout = TimeSpan.FromSeconds(30);
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", legacyToken);
+            client.DefaultRequestHeaders.Add("X-Api-Key", legacyToken);
         })
         .AddStandardResilienceHandler();
 
