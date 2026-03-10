@@ -5,17 +5,20 @@ using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Features.BulkEmail;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 namespace Kariyer.Mail.Api.Features.Schedules.Execution;
 
 public sealed class ScheduleTriggerInvoker
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ScheduleTriggerInvoker> _logger;
+    private readonly IConnectionMultiplexer _multiplexer;
 
-    public ScheduleTriggerInvoker(IServiceScopeFactory scopeFactory, ILogger<ScheduleTriggerInvoker> logger)
+    public ScheduleTriggerInvoker(IServiceScopeFactory scopeFactory, ILogger<ScheduleTriggerInvoker> logger, IConnectionMultiplexer multiplexer)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _multiplexer = multiplexer;
     }
 
     public async Task ExecuteScheduleAsync(string scheduleIdString)
@@ -72,6 +75,11 @@ public sealed class ScheduleTriggerInvoker
             if (!scheduleBlueprint.IsRecurring)
             {
                 scheduleBlueprint.Deactivate();
+                
+                IDatabase garnet = _multiplexer.GetDatabase();
+                await garnet.KeyDeleteAsync("schedules:all:inactive_false");
+                await garnet.KeyDeleteAsync("schedules:all:inactive_true");
+                
                 _logger.LogInformation("One-time schedule [{ScheduleId}] has been fulfilled and marked inactive.", scheduleId);
             }
 
