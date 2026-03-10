@@ -42,8 +42,11 @@ internal sealed class TargetResolutionService : ITargetResolutionService
             response.EnsureSuccessStatusCode();
         }
 
-        List<ResolvedTarget>? targets = await response.Content.ReadFromJsonAsync<List<ResolvedTarget>>(cancellationToken: ct);
-
+        List<ResolvedTarget>? targets = await response.Content.ReadFromJsonAsync<List<ResolvedTarget>>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+            cancellationToken: ct
+        );
+        
         int count = targets?.Count ?? 0;
         activity?.SetTag("legacy.response.count", count);
 

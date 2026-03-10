@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Common.Web;
 using Scriban;
+using Scriban.Runtime;
 using Scriban.Syntax;
 
 namespace Kariyer.Mail.Api.Features.Templates.PreviewTemplate;
@@ -41,8 +42,20 @@ internal sealed class PreviewRawTemplateEndpoint : IEndpoint
                     });
                 }
 
-                string renderedBody = await compiledBody.RenderAsync(request.DummyData);
-                string renderedSubject = await compiledSubject.RenderAsync(request.DummyData);
+                ScriptObject scriptObject = new ();
+                scriptObject.Import(request.DummyData);
+
+                TemplateContext context = new() 
+                {
+                    MemberRenamer = member => member.Name,
+                    MemberFilter = null, 
+                    StrictVariables = true
+                };
+                
+                context.PushGlobal(scriptObject);
+
+                string renderedBody = await compiledBody.RenderAsync(context);
+                string renderedSubject = await compiledSubject.RenderAsync(context);
 
                 logger.LogInformation("Successfully rendered stateless template preview.");
 
