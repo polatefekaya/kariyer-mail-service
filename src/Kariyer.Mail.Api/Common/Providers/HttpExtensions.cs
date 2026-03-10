@@ -1,9 +1,13 @@
 using System;
 using System.Net.Http.Headers;
+using Amazon;
+using Amazon.SimpleEmailV2;
+using Kariyer.Mail.Api.Common.Configuration;
 using Kariyer.Mail.Api.Features.BulkEmail.Services;
 using Kariyer.Mail.Api.Features.DispatchEmail.Providers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Kariyer.Mail.Api.Common.Providers;
 
@@ -29,6 +33,19 @@ public static class HttpExtensions
             .AddStandardResilienceHandler();
         services.AddKeyedScoped<IEmailProvider, MailgunEmailProvider>("Mailgun");
 
+        services.AddSingleton<IAmazonSimpleEmailServiceV2>(sp =>
+        {
+            var config = sp.GetRequiredService<IOptions<EmailSettings>>().Value;
+
+            if (string.IsNullOrWhiteSpace(config.AwsAccessKey) || string.IsNullOrWhiteSpace(config.AwsSecretKey))
+            {
+                throw new InvalidOperationException("AWS SES Credentials are missing from configuration.");
+            }
+
+            var region = RegionEndpoint.GetBySystemName(config.AwsRegion);
+            return new AmazonSimpleEmailServiceV2Client(config.AwsAccessKey, config.AwsSecretKey, region);
+        });
+        
         // Native SDKs / SMTP
         services.AddKeyedScoped<IEmailProvider, AwsSesEmailProvider>("AWS_SES");
         services.AddKeyedScoped<IEmailProvider, OracleCIEmailProvider>("OracleCI_Mail");

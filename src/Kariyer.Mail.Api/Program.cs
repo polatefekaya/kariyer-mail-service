@@ -12,6 +12,7 @@ using Kariyer.Mail.Api.Common.Web.Errors;
 using Hangfire;
 using Hangfire.PostgreSql;
 using Scalar.AspNetCore;
+using Kariyer.Mail.Api.Common.Web.Filters;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -131,7 +132,11 @@ if (app.Environment.IsDevelopment())
 app.UseExceptionHandler();
 app.UseCors("MailCorsPolicy");
 app.UseSerilogRequestLogging();
-app.UseHangfireDashboard("/hangfire");
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new ProxySafeAuthorizationFilter() },
+    DashboardTitle = "Kariyer Mail API - Job Queue" 
+});
 app.MapPrometheusScrapingEndpoint();
 //app.UseHttpsRedirection();
 

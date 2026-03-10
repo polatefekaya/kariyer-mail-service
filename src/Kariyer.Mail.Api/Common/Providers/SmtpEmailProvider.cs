@@ -29,10 +29,15 @@ internal sealed class SmtpEmailProvider : IEmailProvider
 
         using SmtpClient client = new();
 
-        await client.ConnectAsync(config.SmtpHost, config.SmtpPort, SecureSocketOptions.StartTls, ct);
-        await client.AuthenticateAsync(config.SmtpUser, config.SmtpPass, ct);
-
-        await client.SendAsync(message, ct);
-        await client.DisconnectAsync(true, ct);
+        try
+        {
+            await client.ConnectAsync(config.SmtpHost, config.SmtpPort, SecureSocketOptions.StartTls, ct);
+            await client.AuthenticateAsync(config.SmtpUser, config.SmtpPass, ct);
+            await client.SendAsync(message, ct);
+        }
+        finally
+        {
+            await client.DisconnectAsync(true, ct);
+        }
     }
 }
