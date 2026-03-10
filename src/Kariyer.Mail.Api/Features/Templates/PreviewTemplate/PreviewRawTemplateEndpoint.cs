@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Common.Web;
 using Scriban;
@@ -17,8 +18,8 @@ internal sealed class PreviewRawTemplateEndpoint : IEndpoint
             CancellationToken ct) =>
         {
             using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("PreviewRawTemplate");
-            
-            logger.LogDebug("Received stateless preview request. Subject Length: {SubjectLength}, Body Length: {BodyLength}", 
+
+            logger.LogDebug("Received stateless preview request. Subject Length: {SubjectLength}, Body Length: {BodyLength}",
                 request.SubjectTemplate?.Length ?? 0, request.HtmlContent?.Length ?? 0);
 
             if (string.IsNullOrWhiteSpace(request.HtmlContent) && string.IsNullOrWhiteSpace(request.SubjectTemplate))
@@ -28,30 +29,35 @@ internal sealed class PreviewRawTemplateEndpoint : IEndpoint
 
             try
             {
-                Template compiledBody = Template.Parse(request.HtmlContent ?? string.Empty);
-                Template compiledSubject = Template.Parse(request.SubjectTemplate ?? string.Empty);
+                string rawHtml = WebUtility.HtmlDecode(request.HtmlContent ?? string.Empty);
+                string rawSubject = WebUtility.HtmlDecode(request.SubjectTemplate ?? string.Empty);
+                rawHtml = rawHtml.Replace("&nbsp;", " ");
+                rawSubject = rawSubject.Replace("&nbsp;", " ");
+                
+                Template compiledBody = Template.Parse(rawHtml);
+                Template compiledSubject = Template.Parse(rawSubject);
 
                 if (compiledBody.HasErrors || compiledSubject.HasErrors)
                 {
                     logger.LogWarning("Stateless Scriban compilation failed due to syntax errors.");
-                    return Results.BadRequest(new 
-                    { 
-                        Message = "Syntax error in template.", 
+                    return Results.BadRequest(new
+                    {
+                        Message = "Syntax error in template.",
                         BodyErrors = compiledBody.Messages,
-                        SubjectErrors = compiledSubject.Messages 
+                        SubjectErrors = compiledSubject.Messages
                     });
                 }
 
-                ScriptObject scriptObject = new ();
+                ScriptObject scriptObject = new();
                 scriptObject.Import(request.DummyData);
 
-                TemplateContext context = new() 
+                TemplateContext context = new()
                 {
                     MemberRenamer = member => member.Name,
-                    MemberFilter = null, 
+                    MemberFilter = null,
                     StrictVariables = true
                 };
-                
+
                 context.PushGlobal(scriptObject);
 
                 string renderedBody = await compiledBody.RenderAsync(context);
@@ -59,21 +65,21 @@ internal sealed class PreviewRawTemplateEndpoint : IEndpoint
 
                 logger.LogInformation("Successfully rendered stateless template preview.");
 
-                return Results.Ok(new 
-                { 
-                    RenderedSubject = renderedSubject, 
-                    RenderedHtml = renderedBody 
+                return Results.Ok(new
+                {
+                    RenderedSubject = renderedSubject,
+                    RenderedHtml = renderedBody
                 });
             }
             catch (ScriptRuntimeException ex)
             {
                 activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                 logger.LogError(ex, "A runtime error occurred during stateless Scriban rendering.");
-                
-                return Results.BadRequest(new 
-                { 
-                    Message = "A runtime error occurred while rendering the template.", 
-                    Details = ex.Message 
+
+                return Results.BadRequest(new
+                {
+                    Message = "A runtime error occurred while rendering the template.",
+                    Details = ex.Message
                 });
             }
         })
