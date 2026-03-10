@@ -38,7 +38,7 @@ public sealed class EmailJobSchedule
         Filters = filters;
         IsRecurring = isRecurring;
         CronExpression = cronExpression;
-        OneTimeExecuteAt = oneTimeExecuteAt;
+        OneTimeExecuteAt = oneTimeExecuteAt?.ToUniversalTime();
         IsActive = true;
         CreatedAt = DateTime.UtcNow;
     }
@@ -54,7 +54,7 @@ public sealed class EmailJobSchedule
         Filters = filters;
         IsRecurring = isRecurring;
         CronExpression = cronExpression;
-        OneTimeExecuteAt = oneTimeExecuteAt;
+        OneTimeExecuteAt = oneTimeExecuteAt?.ToUniversalTime();
         UpdatedAt = DateTime.UtcNow;
     }
 
