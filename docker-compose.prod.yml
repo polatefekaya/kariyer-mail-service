@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. MICROSOFT GARNET (HIGH-PERFORMANCE CACHE)
+  # ==========================================
+  garnet:
+    image: ghcr.io/microsoft/garnet:latest
+    container_name: kariyer-garnet
+    restart: unless-stopped
+    ports:
+      - "6380:6379" 
+    networks:
+      - kariyer-net
+    volumes:
+      - garnet_data:/data
+    command: ["--aof"]
+
+  # ==========================================
+  # 2. .NET 10 MAIL MICROSERVICE
+  # ==========================================
+  mail-api:
+    build:
+      context: .
+      dockerfile: src/Kariyer.Mail.Api/Dockerfile
+    container_name: kariyer-mail-api
+    restart: unless-stopped
+    depends_on:
+      - garnet
+    networks:
+      - kariyer-net
+    env_file:
+      - .env
+
+volumes:
+  garnet_data:
+
+networks:
+  kariyer-net:
+    external: true
+    name: infra-files_kariyer-net
