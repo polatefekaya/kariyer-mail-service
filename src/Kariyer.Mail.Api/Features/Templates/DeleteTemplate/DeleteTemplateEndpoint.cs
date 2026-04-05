@@ -16,6 +16,7 @@ internal sealed class DeleteTemplateEndpoint : IEndpoint
             MailDbContext dbContext,
             IConnectionMultiplexer multiplexer,
             ILogger<DeleteTemplateEndpoint> logger,
+            ITemplateResolutionService templateService,
             CancellationToken ct) =>
         {
             using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("DeleteTemplate");
@@ -46,7 +47,7 @@ internal sealed class DeleteTemplateEndpoint : IEndpoint
 
             await garnet.KeyDeleteAsync("templates:all:archived_false");
             await garnet.KeyDeleteAsync("templates:all:archived_true");
-            await garnet.KeyDeleteAsync($"template:detail:{id}");
+            await templateService.InvalidateTemplateCacheAsync(id);
 
             logger.LogInformation("Template [{TemplateId}] successfully hard-deleted.", id);
 

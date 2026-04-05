@@ -13,6 +13,7 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using Scalar.AspNetCore;
 using Kariyer.Mail.Api.Common.Web.Filters;
+using Kariyer.Mail.Api.Features.Templates;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,7 +28,8 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
-
+builder.Services.Configure<EmailTemplateSettings>(
+    builder.Configuration.GetSection(EmailTemplateSettings.SectionName));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.Configure<LegacyBackendSettings>(builder.Configuration.GetSection("LegacySystem"));
 builder.Services.Configure<DispatcherSettings>(builder.Configuration.GetSection("Dispatcher"));
@@ -63,6 +65,7 @@ string garnetConn = builder.Configuration.GetConnectionString("Garnet")
 builder.Services.AddDbContext<MailDbContext>(opts => opts.UseNpgsql(dbConn));
 builder.Services.AddMessaging(rabbitMqConn);
 
+builder.Services.AddScoped<ITemplateResolutionService, TemplateResolutionService>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(garnetConn));
 
 builder.Services.AddHangfire(config => config

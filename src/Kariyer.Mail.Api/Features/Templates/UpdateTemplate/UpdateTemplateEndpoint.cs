@@ -18,6 +18,7 @@ internal sealed class UpdateTemplateEndpoint : IEndpoint
             UpdateTemplateRequest request,
             MailDbContext dbContext,
             IConnectionMultiplexer multiplexer,
+            ITemplateResolutionService templateService,
             ILogger<UpdateTemplateEndpoint> logger,
             CancellationToken ct) =>
         {
@@ -59,7 +60,7 @@ internal sealed class UpdateTemplateEndpoint : IEndpoint
             
             await garnet.KeyDeleteAsync("templates:all:archived_false");
             await garnet.KeyDeleteAsync("templates:all:archived_true");
-            await garnet.KeyDeleteAsync($"template:detail:{id}");
+            await templateService.InvalidateTemplateCacheAsync(id);
 
             logger.LogInformation("Template [{TemplateId}] successfully updated and caches invalidated.", id);
 
