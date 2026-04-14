@@ -24,7 +24,6 @@ public static class MessagingExtensions
             x.AddEntityFrameworkOutbox<MailDbContext>(o =>
             {
                 o.UsePostgres();
-                o.UseBusOutbox();
             });
 
             x.AddConsumer<ResolverConsumer>();
@@ -96,9 +95,9 @@ public static class MessagingExtensions
 
                 cfg.ReceiveEndpoint("mail.account.completed", e =>
                 {
+                    e.UseRawJsonSerializer();
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
-                    e.UseRawJsonSerializer();
 
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.company.completed", b => b.ExchangeType = "fanout");
@@ -107,9 +106,9 @@ public static class MessagingExtensions
 
                 cfg.ReceiveEndpoint("mail.admin.company-completed", e =>
                 {
+                    e.UseRawJsonSerializer();
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
-                    e.UseRawJsonSerializer();
 
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.company.completed", b => b.ExchangeType = "fanout");
@@ -138,10 +137,10 @@ public static class MessagingExtensions
                 
                 cfg.ReceiveEndpoint("mail.account.approved", e =>
                 {
+                    e.UseRawJsonSerializer();
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
                     
-                    e.UseRawJsonSerializer();
                 
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.account.approved", b => b.ExchangeType = "fanout");
@@ -150,10 +149,10 @@ public static class MessagingExtensions
             
                 cfg.ReceiveEndpoint("mail.account.rejected", e =>
                 {
+                    e.UseRawJsonSerializer();
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
                     
-                    e.UseRawJsonSerializer();
                 
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.account.rejected", b => b.ExchangeType = "fanout");
