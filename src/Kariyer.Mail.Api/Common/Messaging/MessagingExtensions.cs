@@ -24,6 +24,7 @@ public static class MessagingExtensions
             x.AddEntityFrameworkOutbox<MailDbContext>(o =>
             {
                 o.UsePostgres();
+                o.UseBusOutbox();
             });
 
             x.AddConsumer<ResolverConsumer>();
@@ -159,7 +160,6 @@ public static class MessagingExtensions
                     e.ConfigureConsumer<AccountRejectedConsumer>(context);
                 });
 
-                cfg.ConfigureEndpoints(context);
             });
         });
 

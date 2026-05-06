@@ -4,6 +4,7 @@ using Kariyer.Mail.Api.Common.Models;
 using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Features.DispatchEmail;
 using Kariyer.Mail.Api.Features.Templates;
+using Kariyer.Messaging.Contracts.Account;
 using MassTransit;
 using Microsoft.Extensions.Options;
 

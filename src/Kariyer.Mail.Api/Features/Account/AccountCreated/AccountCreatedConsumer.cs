@@ -4,6 +4,7 @@ using Kariyer.Mail.Api.Common.Models;
 using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Features.DispatchEmail;
 using Kariyer.Mail.Api.Features.Templates;
+using Kariyer.Messaging.Contracts.Account;
 using MassTransit;
 using Microsoft.Extensions.Options;
 
@@ -30,11 +31,11 @@ internal sealed class AccountCreatedConsumer : IConsumer<AccountCreatedEvent>
         AccountCreatedEvent message = context.Message;
 
         using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ProcessAccountCreatedEvent");
-        activity?.SetTag("user.uid", message.Uid);
-        activity?.SetTag("message.id", message.MessageId);
+        activity?.SetTag("user.uid", message.UserId);
+        //activity?.SetTag("message.id", message.UserId);
         activity?.SetTag("account.type", message.AccountType);
 
-        _logger.LogInformation("Processing Account Created event for {Email} [{Uid}]", message.Email, message.Uid);
+        _logger.LogInformation("Processing Account Created event for {Email} [{Uid}]", message.Email, message.UserId);
 
         if (!Ulid.TryParse(_templateSettings.AccountCreatedTemplateId, out Ulid templateId))
         {
@@ -54,7 +55,7 @@ internal sealed class AccountCreatedConsumer : IConsumer<AccountCreatedEvent>
 
         Dictionary<string, string> templateData = new()
         {
-            { "FullName", message.FullName },
+            { "FullName", $"{message.FirstName.Trim()} {message.LastName.Trim()}" },
             { "AccountType", message.AccountType }
         };
 

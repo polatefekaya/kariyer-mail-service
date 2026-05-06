@@ -11,6 +11,7 @@
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
     <PackageReference Include="Hangfire" />
     <PackageReference Include="Hangfire.PostgreSql" />
+    <PackageReference Include="Kariyer.Messaging.Contracts" />
     <PackageReference Include="MailKit" />
     <PackageReference Include="MassTransit.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
