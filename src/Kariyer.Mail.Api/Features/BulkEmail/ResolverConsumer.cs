@@ -128,6 +128,7 @@ internal sealed class ResolverConsumer : IConsumer<StartBulkEmailJobCommand>
 
                 await context.PublishBatch(dispatchCommands, context.CancellationToken);
 
+                _dbContext.EmailTargets.AddRange(targets);
                 await _dbContext.SaveChangesAsync(context.CancellationToken);
                 _dbContext.ChangeTracker.Clear();
 

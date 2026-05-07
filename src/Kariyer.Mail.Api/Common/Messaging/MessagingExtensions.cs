@@ -63,13 +63,7 @@ public static class MessagingExtensions
                     DispatcherSettings dispatcherConfig = context.GetRequiredService<IOptions<DispatcherSettings>>().Value;
 
                     e.PrefetchCount = dispatcherConfig.PrefetchCount;
-
-                    e.Batch<DispatchEmailCommand>(b =>
-                    {
-                        b.MessageLimit = dispatcherConfig.BatchSize;
-                        b.TimeLimit = TimeSpan.FromSeconds(dispatcherConfig.TimeLimitSeconds);
-                        b.ConcurrencyLimit = dispatcherConfig.ConcurrencyLimit;
-                    });
+                    e.ConcurrentMessageLimit = dispatcherConfig.ConcurrencyLimit;
 
                     e.ConfigureConsumer<DispatchEmailConsumer>(context);
                 });

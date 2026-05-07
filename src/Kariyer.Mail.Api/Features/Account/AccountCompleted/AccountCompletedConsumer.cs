@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Kariyer.Mail.Api.Common.Configuration;
 using Kariyer.Mail.Api.Common.Models;
+using Kariyer.Mail.Api.Common.Persistence;
 using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Features.DispatchEmail;
 using Kariyer.Mail.Api.Features.Templates;
@@ -15,15 +16,18 @@ internal sealed class AccountCompletedConsumer : IConsumer<AccountCompletedEvent
     private readonly ILogger<AccountCompletedConsumer> _logger;
     private readonly EmailTemplateSettings _templateSettings;
     private readonly ITemplateResolutionService _templateService;
+    private readonly MailDbContext _dbContext;
 
     public AccountCompletedConsumer(
         ILogger<AccountCompletedConsumer> logger,
         IOptions<EmailTemplateSettings> templateOptions,
-        ITemplateResolutionService templateService)
+        ITemplateResolutionService templateService,
+        MailDbContext dbContext)
     {
         _logger = logger;
         _templateSettings = templateOptions.Value;
         _templateService = templateService;
+        _dbContext = dbContext;
     }
 
     public async Task Consume(ConsumeContext<AccountCompletedEvent> context)
@@ -57,10 +61,14 @@ internal sealed class AccountCompletedConsumer : IConsumer<AccountCompletedEvent
             { "FullName", message.FullName }
         };
 
+        EmailTarget target = new(null, message.Uid, message.Email, template.SubjectTemplate, template.HtmlContent);
+        _dbContext.EmailTargets.Add(target);
+        await _dbContext.SaveChangesAsync(context.CancellationToken);
+
         DispatchEmailCommand dispatchCommand = new()
         {
-            TargetId = Ulid.NewUlid(), 
-            JobId = null, 
+            TargetId = target.Id,
+            JobId = null,
             Email = message.Email,
             Subject = template.SubjectTemplate,
             RawTemplate = template.HtmlContent,
