@@ -23,6 +23,9 @@ services:
     build:
       context: .
       dockerfile: src/Kariyer.Mail.Api/Dockerfile
+      args:
+        GITHUB_USER: ${GITHUB_USER}
+        GITHUB_TOKEN: ${GITHUB_TOKEN}
     container_name: kariyer-mail-api
     restart: unless-stopped
     depends_on:

@@ -21,6 +21,9 @@ services:
     build:
       context: .
       dockerfile: src/Kariyer.Mail.Api/Dockerfile
+      args:
+        GITHUB_USER: ${GITHUB_USER}
+        GITHUB_TOKEN: ${GITHUB_TOKEN}
     container_name: kariyer-mail-api
     network_mode: host # Crucial so it can find your bare-metal Postgres & RabbitMQ on 127.0.0.1
     restart: unless-stopped
