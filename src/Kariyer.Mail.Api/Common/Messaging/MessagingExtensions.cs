@@ -40,15 +40,7 @@ public static class MessagingExtensions
 
             x.UsingRabbitMq((context, cfg) =>
             {
-                var rabbitUri = new Uri(rabbitConn);
-                var userInfo = rabbitUri.UserInfo.Split(':');
-                string vhost = string.IsNullOrWhiteSpace(rabbitUri.AbsolutePath.TrimStart('/')) ? "/" : rabbitUri.AbsolutePath;
-
-                cfg.Host(rabbitUri.Host, rabbitUri.Port, vhost, h =>
-                {
-                    h.Username(userInfo[0]);
-                    h.Password(userInfo.Length > 1 ? userInfo[1] : "guest");
-                });
+                cfg.Host(new Uri(rabbitConn));
 
                 cfg.Message<StartBulkEmailJobCommand>(m => m.SetEntityName("MailExchange"));
                 cfg.Message<DispatchEmailCommand>(m => m.SetEntityName("MailExchange"));
