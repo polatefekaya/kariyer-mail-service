@@ -63,7 +63,7 @@ internal sealed class AccountCreatedConsumer : IConsumer<AccountCreatedEvent>
             { "AccountType", message.AccountType }
         };
 
-        EmailTarget target = new(null, message.UserId, message.Email, template.SubjectTemplate, template.HtmlContent);
+        EmailTarget target = new(null, message.UserId.ToString(), message.Email, template.SubjectTemplate, template.HtmlContent);
         _dbContext.EmailTargets.Add(target);
         await _dbContext.SaveChangesAsync(context.CancellationToken);
 

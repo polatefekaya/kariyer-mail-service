@@ -1,4 +1,5 @@
 using Kariyer.Mail.Api.Common.Configuration;
+using Kariyer.Mail.Api.Common.Jobs;
 using Kariyer.Mail.Api.Common.Messaging;
 using Kariyer.Mail.Api.Common.Persistence;
 using Kariyer.Mail.Api.Common.Providers;
@@ -14,6 +15,7 @@ using Hangfire.PostgreSql;
 using Scalar.AspNetCore;
 using Kariyer.Mail.Api.Common.Web.Filters;
 using Kariyer.Mail.Api.Features.Templates;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +32,9 @@ builder.Services.AddProblemDetails();
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 builder.Services.Configure<EmailTemplateSettings>(
     builder.Configuration.GetSection(EmailTemplateSettings.SectionName));
+builder.Services.Configure<RetentionSettings>(
+    builder.Configuration.GetSection(RetentionSettings.SectionName));
+builder.Services.AddSingleton<TargetRetentionJob>();
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.Configure<LegacyBackendSettings>(builder.Configuration.GetSection("LegacySystem"));
 builder.Services.Configure<DispatcherSettings>(builder.Configuration.GetSection("Dispatcher"));
@@ -140,8 +145,14 @@ app.UseSerilogRequestLogging();
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
     Authorization = new[] { new ProxySafeAuthorizationFilter() },
-    DashboardTitle = "Kariyer Mail API - Job Queue" 
+    DashboardTitle = "Kariyer Mail API - Job Queue"
 });
+
+var retentionSettings = app.Services.GetRequiredService<IOptions<RetentionSettings>>().Value;
+RecurringJob.AddOrUpdate<TargetRetentionJob>(
+    "target-retention-cleanup",
+    job => job.ExecuteAsync(CancellationToken.None),
+    retentionSettings.CronExpression);
 app.MapPrometheusScrapingEndpoint();
 //app.UseHttpsRedirection();
 

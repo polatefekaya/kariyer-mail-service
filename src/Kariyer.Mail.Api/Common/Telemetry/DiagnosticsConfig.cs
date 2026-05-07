@@ -31,4 +31,8 @@ public static class DiagnosticsConfig
         "kariyer.mail.resolution_batch_duration_ms",
         unit: "ms",
         description: "Measures the time taken to fetch, insert, and queue a single batch of targets");
+
+    public static readonly Counter<long> TargetsDeletedCounter = MailMeter.CreateCounter<long>(
+        "kariyer.mail.targets_deleted",
+        description: "Counts the number of processed EmailTarget rows removed by the retention job");
 }
