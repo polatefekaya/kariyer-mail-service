@@ -66,7 +66,9 @@ builder.Services.AddDbContext<MailDbContext>(opts => opts.UseNpgsql(dbConn));
 builder.Services.AddMessaging(rabbitMqConn);
 
 builder.Services.AddScoped<ITemplateResolutionService, TemplateResolutionService>();
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(garnetConn));
+builder.Services.AddSingleton<IConnectionMultiplexer>(
+    ConnectionMultiplexer.Connect($"{garnetConn},abortConnect=false,connectRetry=3,connectTimeout=5000")
+);
 
 builder.Services.AddHangfire(config => config
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)

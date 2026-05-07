@@ -8,6 +8,7 @@
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageVersion Include="Hangfire" Version="1.8.23" />
     <PackageVersion Include="Hangfire.PostgreSql" Version="1.21.1" />
+    <PackageVersion Include="Kariyer.Messaging.Contracts" Version="1.0.0" />
     <PackageVersion Include="MailKit" Version="4.15.1" />
     <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.5" />
     <PackageVersion Include="MassTransit" Version="8.5.5" />

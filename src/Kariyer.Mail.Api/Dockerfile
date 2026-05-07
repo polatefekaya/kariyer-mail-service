@@ -2,10 +2,14 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /app
 
+ARG GITHUB_USER
+ARG GITHUB_TOKEN
+
 # Copy the root architectural files (Crucial for CPM/Directory.Build)
 COPY ["Kariyer.Mail.slnx", "./"]
 COPY ["Directory.Packages.props", "./"]
 COPY ["Directory.Build.props", "./"]
+COPY ["nuget.config", "./"]
 
 # Copy the project file and restore
 COPY ["src/Kariyer.Mail.Api/Kariyer.Mail.Api.csproj", "src/Kariyer.Mail.Api/"]
