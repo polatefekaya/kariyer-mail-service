@@ -28,12 +28,13 @@ internal sealed class GetTemplateEndpoint : IEndpoint
             }
 
             TemplateDetailDto dto = new (
-                template.Id, 
-                template.Name, 
-                template.SubjectTemplate, 
-                template.HtmlContent, 
-                template.IsArchived, 
-                template.CreatedAt);
+                template.Id,
+                template.Name,
+                template.SubjectTemplate,
+                template.HtmlContent,
+                template.IsArchived,
+                template.CreatedAt,
+                template.UpdatedAt);
 
             return Results.Ok(dto);
         })

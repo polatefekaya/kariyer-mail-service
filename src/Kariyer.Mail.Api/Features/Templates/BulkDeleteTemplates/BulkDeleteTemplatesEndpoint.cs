@@ -4,6 +4,7 @@ using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Common.Web;
 using Kariyer.Mail.Api.Common.Web.Filters;
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 
 namespace Kariyer.Mail.Api.Features.Templates.BulkDeleteTemplates;
 
@@ -14,6 +15,8 @@ internal sealed class BulkDeleteTemplatesEndpoint : IEndpoint
         app.MapPost("templates/bulk-delete", async (
             BulkDeleteTemplatesRequest request,
             MailDbContext dbContext,
+            IConnectionMultiplexer multiplexer,
+            ITemplateResolutionService templateService,
             ILogger<BulkDeleteTemplatesEndpoint> logger,
             CancellationToken ct) =>
         {
@@ -39,7 +42,15 @@ internal sealed class BulkDeleteTemplatesEndpoint : IEndpoint
                     .ExecuteDeleteAsync(ct);
             }
 
-            logger.LogInformation("Bulk delete complete. Requested: {Requested}, Deleted: {Deleted}, Locked: {Locked}", 
+            if (deletedCount > 0)
+            {
+                IDatabase garnet = multiplexer.GetDatabase();
+                await garnet.KeyDeleteAsync("templates:all:archived_false");
+                await garnet.KeyDeleteAsync("templates:all:archived_true");
+                await Task.WhenAll(safeToDeleteIds.Select(id => templateService.InvalidateTemplateCacheAsync(id)));
+            }
+
+            logger.LogInformation("Bulk delete complete. Requested: {Requested}, Deleted: {Deleted}, Locked: {Locked}",
                 request.TemplateIds.Length, deletedCount, lockedTemplateIds.Length);
 
             if (lockedTemplateIds.Length > 0)
@@ -47,7 +58,7 @@ internal sealed class BulkDeleteTemplatesEndpoint : IEndpoint
                 logger.LogWarning("Bulk delete skipped {LockedCount} templates because they are actively referenced by Email Jobs.", lockedTemplateIds.Length);
             }
 
-            return Results.Ok(new 
+            return Results.Ok(new
             { 
                 RequestedCount = request.TemplateIds.Length,
                 DeletedCount = deletedCount,

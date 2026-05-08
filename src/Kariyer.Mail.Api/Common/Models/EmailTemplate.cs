@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Kariyer.Mail.Api.Common.Models;
 
 public sealed class EmailTemplate
@@ -18,6 +20,19 @@ public sealed class EmailTemplate
         HtmlContent = htmlContent;
         IsArchived = false;
         CreatedAt = DateTime.UtcNow;
+    }
+
+    // Used exclusively by System.Text.Json to reconstruct from cache — preserves the real Id
+    [JsonConstructor]
+    private EmailTemplate(Ulid id, string name, string subjectTemplate, string htmlContent, bool isArchived, DateTime createdAt, DateTime? updatedAt)
+    {
+        Id = id;
+        Name = name;
+        SubjectTemplate = subjectTemplate;
+        HtmlContent = htmlContent;
+        IsArchived = isArchived;
+        CreatedAt = createdAt;
+        UpdatedAt = updatedAt;
     }
 
     public void Update(string name, string subjectTemplate, string htmlContent)
