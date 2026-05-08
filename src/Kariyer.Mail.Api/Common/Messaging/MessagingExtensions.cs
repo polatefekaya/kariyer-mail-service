@@ -42,11 +42,6 @@ public static class MessagingExtensions
             {
                 cfg.Host(new Uri(rabbitConn));
 
-                // Add raw JSON as a supported deserializer for all endpoints so that
-                // identity-service fanout events (raw JSON, no MassTransit envelope) can
-                // be consumed without UseRawJsonSerializer() affecting outgoing publishes.
-                cfg.AddRawJsonDeserializer(RawSerializerOptions.AnyMessageType);
-
                 cfg.ReceiveEndpoint("mail.bulk.resolve", e =>
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
@@ -71,7 +66,7 @@ public static class MessagingExtensions
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
-                    
+                    e.AddRawJsonDeserializer(RawSerializerOptions.AnyMessageType);
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.account.created", b => b.ExchangeType = "fanout");
                     e.ConfigureConsumer<AccountCreatedConsumer>(context);
@@ -81,8 +76,8 @@ public static class MessagingExtensions
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
-                    
-                    e.ConfigureConsumeTopology = false; 
+                    e.AddRawJsonDeserializer(RawSerializerOptions.AnyMessageType);
+                    e.ConfigureConsumeTopology = false;
                     e.Bind("identity.account.not-completed", b => b.ExchangeType = "fanout");
                     e.ConfigureConsumer<AccountDidNotCompletedConsumer>(context);
                 });
@@ -91,7 +86,7 @@ public static class MessagingExtensions
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
-
+                    e.AddRawJsonDeserializer(RawSerializerOptions.AnyMessageType);
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.company.completed", b => b.ExchangeType = "fanout");
                     e.ConfigureConsumer<AccountCompletedConsumer>(context);
@@ -101,7 +96,7 @@ public static class MessagingExtensions
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
-
+                    e.AddRawJsonDeserializer(RawSerializerOptions.AnyMessageType);
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.company.completed", b => b.ExchangeType = "fanout");
                     e.ConfigureConsumer<AdminCompanyCompletedConsumer>(context);
@@ -111,7 +106,7 @@ public static class MessagingExtensions
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
-                    
+                    e.AddRawJsonDeserializer(RawSerializerOptions.AnyMessageType);
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.account.frozen", b => b.ExchangeType = "fanout");
                     e.ConfigureConsumer<AccountFrozenConsumer>(context);
@@ -121,29 +116,27 @@ public static class MessagingExtensions
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
-
+                    e.AddRawJsonDeserializer(RawSerializerOptions.AnyMessageType);
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.account.deleted", b => b.ExchangeType = "fanout");
                     e.ConfigureConsumer<AccountDeletedConsumer>(context);
                 });
-                
+
                 cfg.ReceiveEndpoint("mail.account.approved", e =>
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
-                    
-                
+                    e.AddRawJsonDeserializer(RawSerializerOptions.AnyMessageType);
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.account.approved", b => b.ExchangeType = "fanout");
                     e.ConfigureConsumer<AccountApprovedConsumer>(context);
                 });
-            
+
                 cfg.ReceiveEndpoint("mail.account.rejected", e =>
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
-                    
-                
+                    e.AddRawJsonDeserializer(RawSerializerOptions.AnyMessageType);
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.account.rejected", b => b.ExchangeType = "fanout");
                     e.ConfigureConsumer<AccountRejectedConsumer>(context);

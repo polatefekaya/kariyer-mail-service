@@ -95,10 +95,10 @@ internal sealed class TemplateResolutionService : ITemplateResolutionService
     private async Task PopulateCacheAsync(IDatabase db, EmailTemplate template)
     {
         string serialized = JsonSerializer.Serialize(template);
-        var tasks = new List<Task> { db.StringSetAsync(IdKey(template.Id), serialized, _cacheTtl).AsTask() };
+        var tasks = new List<Task<bool>> { db.StringSetAsync(IdKey(template.Id), serialized, _cacheTtl) };
 
         if (!string.IsNullOrWhiteSpace(template.Slug))
-            tasks.Add(db.StringSetAsync(SlugKey(template.Slug), serialized, _cacheTtl).AsTask());
+            tasks.Add(db.StringSetAsync(SlugKey(template.Slug), serialized, _cacheTtl));
 
         await Task.WhenAll(tasks);
     }
