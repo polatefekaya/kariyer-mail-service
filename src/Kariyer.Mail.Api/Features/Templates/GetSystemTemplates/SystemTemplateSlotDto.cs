@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Kariyer.Mail.Api.Features.Templates.GetTemplate.Contracts;
 
 namespace Kariyer.Mail.Api.Features.Templates.GetSystemTemplates;
@@ -9,6 +10,7 @@ public sealed record SystemTemplateSlotDto(
     SystemTemplateStatus Status,
     TemplateDetailDto? Template);
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum SystemTemplateStatus
 {
     Configured,  // ID in settings + template found in DB
