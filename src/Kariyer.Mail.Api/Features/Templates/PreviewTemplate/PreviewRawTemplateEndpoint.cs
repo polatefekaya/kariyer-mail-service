@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Text.Json;
 using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Common.Web;
 using Scriban;
@@ -49,7 +50,9 @@ internal sealed class PreviewRawTemplateEndpoint : IEndpoint
                 }
 
                 ScriptObject scriptObject = new();
-                scriptObject.Import(request.DummyData);
+                if (request.DummyData != null)
+                    foreach (var (key, val) in request.DummyData)
+                        scriptObject[key] = UnwrapJsonElement(val);
 
                 TemplateContext context = new()
                 {
@@ -85,4 +88,15 @@ internal sealed class PreviewRawTemplateEndpoint : IEndpoint
         })
         .WithTags("Templates");
     }
+
+    private static object? UnwrapJsonElement(object? value) => value switch
+    {
+        JsonElement { ValueKind: JsonValueKind.String  } el => el.GetString(),
+        JsonElement { ValueKind: JsonValueKind.True    }    => true,
+        JsonElement { ValueKind: JsonValueKind.False   }    => false,
+        JsonElement { ValueKind: JsonValueKind.Null    }    => null,
+        JsonElement { ValueKind: JsonValueKind.Number  } el =>
+            el.TryGetInt64(out long l) ? (object)l : el.GetDouble(),
+        _ => value
+    };
 }

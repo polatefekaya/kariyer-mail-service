@@ -1,7 +1,9 @@
+using System.Text.Json;
 using Kariyer.Mail.Api.Common.Persistence;
 using Kariyer.Mail.Api.Common.Web;
 using Microsoft.EntityFrameworkCore;
 using Scriban;
+using Scriban.Runtime;
 using Scriban.Syntax;
 
 namespace Kariyer.Mail.Api.Features.Templates.PreviewTemplate;
@@ -39,8 +41,20 @@ internal sealed class PreviewTemplateEndpoint : IEndpoint
                     });
                 }
 
-                string renderedBody = await compiledBody.RenderAsync(request.DummyData);
-                string renderedSubject = await compiledSubject.RenderAsync(request.DummyData);
+                ScriptObject scriptObject = new();
+                if (request.DummyData != null)
+                    foreach (var (key, val) in request.DummyData)
+                        scriptObject[key] = UnwrapJsonElement(val);
+
+                TemplateContext ctx = new()
+                {
+                    MemberRenamer = member => member.Name,
+                    StrictVariables = false
+                };
+                ctx.PushGlobal(scriptObject);
+
+                string renderedBody = await compiledBody.RenderAsync(ctx);
+                string renderedSubject = await compiledSubject.RenderAsync(ctx);
 
                 return Results.Ok(new 
                 { 
@@ -59,4 +73,15 @@ internal sealed class PreviewTemplateEndpoint : IEndpoint
         })
         .WithTags("Templates");
     }
+
+    private static object? UnwrapJsonElement(object? value) => value switch
+    {
+        JsonElement { ValueKind: JsonValueKind.String } el => el.GetString(),
+        JsonElement { ValueKind: JsonValueKind.True   }    => true,
+        JsonElement { ValueKind: JsonValueKind.False  }    => false,
+        JsonElement { ValueKind: JsonValueKind.Null   }    => null,
+        JsonElement { ValueKind: JsonValueKind.Number } el =>
+            el.TryGetInt64(out long l) ? (object)l : el.GetDouble(),
+        _ => value
+    };
 }
