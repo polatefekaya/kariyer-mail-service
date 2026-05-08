@@ -50,10 +50,11 @@ internal sealed class GetAllTemplatesEndpoint : IEndpoint
             List<TemplateSummaryDto> templates = await query
                 .OrderByDescending(e => e.CreatedAt)
                 .Select(e => new TemplateSummaryDto(
-                    e.Id, 
-                    e.Name, 
-                    e.IsArchived, 
-                    e.CreatedAt, 
+                    e.Id,
+                    e.Name,
+                    e.IsArchived,
+                    e.IsSystemTemplate,
+                    e.CreatedAt,
                     e.UpdatedAt
                 ))
                 .ToListAsync(ct);

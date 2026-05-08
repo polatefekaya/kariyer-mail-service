@@ -191,6 +191,9 @@ namespace Kariyer.Mail.Api.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsSystemTemplate")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");

@@ -23,11 +23,18 @@ internal sealed class BulkDeleteTemplatesEndpoint : IEndpoint
             using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("BulkDeleteTemplates");
             activity?.SetTag("request.count", request.TemplateIds.Length);
 
-            Ulid[] lockedTemplateIds = await dbContext.EmailJobs
+            Ulid[] jobLockedIds = await dbContext.EmailJobs
                 .Where(j => j.TemplateId != null && request.TemplateIds.Contains(j.TemplateId.Value))
                 .Select(j => j.TemplateId!.Value)
                 .Distinct()
                 .ToArrayAsync(ct);
+
+            Ulid[] systemLockedIds = await dbContext.EmailTemplates
+                .Where(t => t.IsSystemTemplate && request.TemplateIds.Contains(t.Id))
+                .Select(t => t.Id)
+                .ToArrayAsync(ct);
+
+            Ulid[] lockedTemplateIds = jobLockedIds.Union(systemLockedIds).ToArray();
 
             Ulid[] safeToDeleteIds = request.TemplateIds
                 .Except(lockedTemplateIds)

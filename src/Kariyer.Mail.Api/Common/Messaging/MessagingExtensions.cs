@@ -42,16 +42,15 @@ public static class MessagingExtensions
             {
                 cfg.Host(new Uri(rabbitConn));
 
-                cfg.Message<StartBulkEmailJobCommand>(m => m.SetEntityName("MailExchange"));
-                cfg.Message<DispatchEmailCommand>(m => m.SetEntityName("MailExchange"));
-                
+                // Add raw JSON as a supported deserializer for all endpoints so that
+                // identity-service fanout events (raw JSON, no MassTransit envelope) can
+                // be consumed without UseRawJsonSerializer() affecting outgoing publishes.
+                cfg.AddRawJsonDeserializer(RawSerializerOptions.AnyMessageType);
+
                 cfg.ReceiveEndpoint("mail.bulk.resolve", e =>
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
-                    
-                    e.ConfigureConsumeTopology = false;
-                    e.Bind("MailExchange", s => s.RoutingKey = "bulk.resolve");
                     e.ConfigureConsumer<ResolverConsumer>(context);
                 });
 
@@ -90,7 +89,6 @@ public static class MessagingExtensions
 
                 cfg.ReceiveEndpoint("mail.account.completed", e =>
                 {
-                    e.UseRawJsonSerializer();
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
 
@@ -101,7 +99,6 @@ public static class MessagingExtensions
 
                 cfg.ReceiveEndpoint("mail.admin.company-completed", e =>
                 {
-                    e.UseRawJsonSerializer();
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
 
@@ -132,7 +129,6 @@ public static class MessagingExtensions
                 
                 cfg.ReceiveEndpoint("mail.account.approved", e =>
                 {
-                    e.UseRawJsonSerializer();
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
                     
@@ -144,7 +140,6 @@ public static class MessagingExtensions
             
                 cfg.ReceiveEndpoint("mail.account.rejected", e =>
                 {
-                    e.UseRawJsonSerializer();
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
                     e.ApplyStandardResilience();
                     

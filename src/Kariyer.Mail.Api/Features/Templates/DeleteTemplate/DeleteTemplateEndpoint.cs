@@ -23,22 +23,42 @@ internal sealed class DeleteTemplateEndpoint : IEndpoint
             activity?.SetTag("template.id", id.ToString());
 
             IDatabase garnet = multiplexer.GetDatabase();
-            
+
+            var guards = await dbContext.EmailTemplates
+                .AsNoTracking()
+                .Where(t => t.Id == id)
+                .Select(t => new { t.IsSystemTemplate })
+                .FirstOrDefaultAsync(ct);
+
+            if (guards == null)
+            {
+                logger.LogWarning("Hard delete failed: Template [{TemplateId}] not found.", id);
+                return Results.NotFound(new { Message = "Template not found." });
+            }
+
+            if (guards.IsSystemTemplate)
+            {
+                logger.LogWarning("Hard delete rejected: Template [{TemplateId}] is a system template.", id);
+                return Results.Json(
+                    new { Message = "System templates cannot be deleted. Unmark it as a system template first if you intend to replace it." },
+                    statusCode: StatusCodes.Status423Locked);
+            }
+
             bool isReferenced = await dbContext.EmailJobs.AnyAsync(j => j.TemplateId == id, ct);
-            
+
             if (isReferenced)
             {
                 logger.LogWarning("Hard delete rejected: Template [{TemplateId}] is referenced by existing Email Jobs. Recommend soft-archive.", id);
-                return Results.Conflict(new 
-                { 
-                    Message = "This template has been used in one or more bulk email jobs. It cannot be deleted to preserve the historical audit trail. Consider archiving it instead." 
+                return Results.Conflict(new
+                {
+                    Message = "This template has been used in one or more bulk email jobs. It cannot be deleted to preserve the historical audit trail. Consider archiving it instead."
                 });
             }
 
             int deletedCount = await dbContext.EmailTemplates
                 .Where(t => t.Id == id)
                 .ExecuteDeleteAsync(ct);
-                
+
             if (deletedCount == 0)
             {
                 logger.LogWarning("Hard delete failed: Template [{TemplateId}] not found.", id);

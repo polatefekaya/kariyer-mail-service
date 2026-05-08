@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Kariyer.Mail.Api.Common.Persistence;
 using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Common.Web;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 
@@ -22,14 +23,39 @@ internal sealed class ArchiveTemplateEndpoint : IEndpoint
             activity?.SetTag("template.id", id.ToString());
 
             IDatabase garnet = multiplexer.GetDatabase();
-            
+
+            var guards = await dbContext.EmailTemplates
+                .AsNoTracking()
+                .Where(t => t.Id == id)
+                .Select(t => new { t.IsSystemTemplate, t.IsArchived })
+                .FirstOrDefaultAsync(ct);
+
+            if (guards == null)
+            {
+                logger.LogWarning("Archive failed: Template [{TemplateId}] not found.", id);
+                return Results.NotFound(new { Message = "Template not found or already archived." });
+            }
+
+            if (guards.IsSystemTemplate)
+            {
+                logger.LogWarning("Archive rejected: Template [{TemplateId}] is a system template.", id);
+                return Results.Json(
+                    new { Message = "System templates cannot be archived. Unmark it as a system template first if you intend to replace it." },
+                    statusCode: StatusCodes.Status423Locked);
+            }
+
+            if (guards.IsArchived)
+            {
+                return Results.NotFound(new { Message = "Template not found or already archived." });
+            }
+
             int updatedCount = await dbContext.EmailTemplates
                 .Where(t => t.Id == id && !t.IsArchived)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(t => t.IsArchived, true)
                     .SetProperty(t => t.UpdatedAt, DateTime.UtcNow),
                 ct);
-                
+
             if (updatedCount == 0)
             {
                 logger.LogWarning("Archive failed: Template [{TemplateId}] not found or already archived.", id);
