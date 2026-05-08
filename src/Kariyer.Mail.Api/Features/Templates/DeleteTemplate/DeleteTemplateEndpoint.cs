@@ -27,7 +27,7 @@ internal sealed class DeleteTemplateEndpoint : IEndpoint
             var guards = await dbContext.EmailTemplates
                 .AsNoTracking()
                 .Where(t => t.Id == id)
-                .Select(t => new { t.IsSystemTemplate })
+                .Select(t => new { t.IsSystemTemplate, t.Slug })
                 .FirstOrDefaultAsync(ct);
 
             if (guards == null)
@@ -67,7 +67,7 @@ internal sealed class DeleteTemplateEndpoint : IEndpoint
 
             await garnet.KeyDeleteAsync("templates:all:archived_false");
             await garnet.KeyDeleteAsync("templates:all:archived_true");
-            await templateService.InvalidateTemplateCacheAsync(id);
+            await templateService.InvalidateAsync(id, guards.Slug);
 
             logger.LogInformation("Template [{TemplateId}] successfully hard-deleted.", id);
 

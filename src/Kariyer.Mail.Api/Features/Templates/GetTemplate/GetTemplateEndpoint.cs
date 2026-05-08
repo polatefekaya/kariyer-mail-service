@@ -34,6 +34,7 @@ internal sealed class GetTemplateEndpoint : IEndpoint
                 template.HtmlContent,
                 template.IsArchived,
                 template.IsSystemTemplate,
+                template.Slug,
                 template.CreatedAt,
                 template.UpdatedAt);
 

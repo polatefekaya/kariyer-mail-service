@@ -54,13 +54,14 @@ internal sealed class UpdateTemplateEndpoint : IEndpoint
                 });
             }
 
+            string? slug = template.Slug;
             template.Update(request.Name, request.SubjectTemplate, request.HtmlContent);
 
             await dbContext.SaveChangesAsync(ct);
-            
+
             await garnet.KeyDeleteAsync("templates:all:archived_false");
             await garnet.KeyDeleteAsync("templates:all:archived_true");
-            await templateService.InvalidateTemplateCacheAsync(id);
+            await templateService.InvalidateAsync(id, slug);
 
             logger.LogInformation("Template [{TemplateId}] successfully updated and caches invalidated.", id);
 

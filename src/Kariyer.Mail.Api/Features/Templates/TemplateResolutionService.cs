@@ -13,7 +13,8 @@ internal sealed class TemplateResolutionService : ITemplateResolutionService
     private readonly ILogger<TemplateResolutionService> _logger;
     private readonly TimeSpan _cacheTtl = TimeSpan.FromHours(24);
 
-    private static string GetCacheKey(Ulid templateId) => $"template:detail:{templateId}";
+    private static string IdKey(Ulid id) => $"template:detail:{id}";
+    private static string SlugKey(string slug) => $"template:slug:{slug}";
 
     public TemplateResolutionService(
         IConnectionMultiplexer garnet,
@@ -25,48 +26,80 @@ internal sealed class TemplateResolutionService : ITemplateResolutionService
         _logger = logger;
     }
 
-    public async Task<EmailTemplate?> GetTemplateAsync(Ulid templateId, CancellationToken cancellationToken = default)
+    public async Task<EmailTemplate?> GetTemplateAsync(Ulid templateId, CancellationToken ct = default)
     {
         IDatabase db = _garnet.GetDatabase();
-        string cacheKey = GetCacheKey(templateId);
+        string key = IdKey(templateId);
 
-        RedisValue cachedData = await db.StringGetAsync(cacheKey);
-        
-        if (cachedData.HasValue)
+        RedisValue cached = await db.StringGetAsync(key);
+        if (cached.HasValue)
         {
             _logger.LogDebug("Cache HIT for template [{TemplateId}]", templateId);
-            return JsonSerializer.Deserialize<EmailTemplate>(cachedData.ToString()!);
+            return JsonSerializer.Deserialize<EmailTemplate>(cached.ToString()!);
         }
 
         _logger.LogDebug("Cache MISS for template [{TemplateId}]. Hitting PostgreSQL...", templateId);
 
         EmailTemplate? template = await _dbContext.EmailTemplates
             .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == templateId, cancellationToken);
+            .FirstOrDefaultAsync(t => t.Id == templateId, ct);
 
         if (template != null)
-        {
-            string serializedTemplate = JsonSerializer.Serialize(template);
-            await db.StringSetAsync(cacheKey, serializedTemplate, _cacheTtl);
-        }
+            await PopulateCacheAsync(db, template);
 
         return template;
     }
 
-    public async Task InvalidateTemplateCacheAsync(Ulid templateId)
+    public async Task<EmailTemplate?> GetBySlugAsync(string slug, CancellationToken ct = default)
     {
         IDatabase db = _garnet.GetDatabase();
-        string cacheKey = GetCacheKey(templateId);
-        
-        bool keyDeleted = await db.KeyDeleteAsync(cacheKey);
-        
-        if (keyDeleted)
+        string key = SlugKey(slug);
+
+        RedisValue cached = await db.StringGetAsync(key);
+        if (cached.HasValue)
         {
-            _logger.LogInformation("Successfully evicted cache for template [{TemplateId}]", templateId);
+            _logger.LogDebug("Cache HIT for slug [{Slug}]", slug);
+            return JsonSerializer.Deserialize<EmailTemplate>(cached.ToString()!);
         }
+
+        _logger.LogDebug("Cache MISS for slug [{Slug}]. Hitting PostgreSQL...", slug);
+
+        EmailTemplate? template = await _dbContext.EmailTemplates
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Slug == slug, ct);
+
+        if (template != null)
+            await PopulateCacheAsync(db, template);
+
+        return template;
+    }
+
+    public async Task InvalidateAsync(Ulid id, string? slug = null)
+    {
+        IDatabase db = _garnet.GetDatabase();
+
+        bool idDeleted = await db.KeyDeleteAsync(IdKey(id));
+        if (idDeleted)
+            _logger.LogInformation("Evicted cache for template [{TemplateId}]", id);
         else
+            _logger.LogDebug("Cache eviction for template [{TemplateId}]: key was not present", id);
+
+        if (!string.IsNullOrWhiteSpace(slug))
         {
-            _logger.LogDebug("Attempted to evict cache for template [{TemplateId}], but it was not in Garnet.", templateId);
+            bool slugDeleted = await db.KeyDeleteAsync(SlugKey(slug));
+            if (slugDeleted)
+                _logger.LogInformation("Evicted cache for template slug [{Slug}]", slug);
         }
+    }
+
+    private async Task PopulateCacheAsync(IDatabase db, EmailTemplate template)
+    {
+        string serialized = JsonSerializer.Serialize(template);
+        var tasks = new List<Task> { db.StringSetAsync(IdKey(template.Id), serialized, _cacheTtl).AsTask() };
+
+        if (!string.IsNullOrWhiteSpace(template.Slug))
+            tasks.Add(db.StringSetAsync(SlugKey(template.Slug), serialized, _cacheTtl).AsTask());
+
+        await Task.WhenAll(tasks);
     }
 }

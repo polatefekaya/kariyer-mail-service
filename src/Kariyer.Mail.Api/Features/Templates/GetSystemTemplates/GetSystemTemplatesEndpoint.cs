@@ -19,54 +19,43 @@ internal sealed class GetSystemTemplatesEndpoint : IEndpoint
         {
             EmailTemplateSettings s = settingsOptions.Value;
 
-            // All defined system slots: (context label, settings key, raw ID string from config)
-            (string Context, string Description, string SettingsKey, string RawId)[] slots =
+            (string Context, string Description, string SettingsKey, string Slug)[] slots =
             [
-                ("AccountCreated",              "Yeni bir hesap oluşturulduğunda gönderilir.",                        nameof(s.AccountCreatedTemplateId),              s.AccountCreatedTemplateId),
-                ("AccountCompleted",            "Kullanıcı profilini tamamladığında gönderilir.",                     nameof(s.AccountCompletedTemplateId),            s.AccountCompletedTemplateId),
-                ("AccountApproved",             "Hesap başvurusu onaylandığında gönderilir.",                         nameof(s.AccountApprovedTemplateId),             s.AccountApprovedTemplateId),
-                ("AccountRejected",             "Hesap başvurusu reddedildiğinde gönderilir.",                        nameof(s.AccountRejectedTemplateId),             s.AccountRejectedTemplateId),
-                ("AccountFrozen",               "Hesap dondurulduğunda gönderilir.",                                  nameof(s.AccountFrozenTemplateId),               s.AccountFrozenTemplateId),
-                ("AccountDeleted",              "Hesap silindiğinde gönderilir.",                                     nameof(s.AccountDeletedTemplateId),              s.AccountDeletedTemplateId),
-                ("AccountDidNotCompleted.Step1","1. hatırlatma: Kullanıcı profili tamamlanmamış.",                    nameof(s.AccountDidNotCompletedStep1TemplateId), s.AccountDidNotCompletedStep1TemplateId),
-                ("AccountDidNotCompleted.Step2","2. hatırlatma: Kullanıcı profili tamamlanmamış.",                    nameof(s.AccountDidNotCompletedStep2TemplateId), s.AccountDidNotCompletedStep2TemplateId),
-                ("AccountDidNotCompleted.Step3","3. hatırlatma: Kullanıcı profili tamamlanmamış.",                    nameof(s.AccountDidNotCompletedStep3TemplateId), s.AccountDidNotCompletedStep3TemplateId),
-                ("AdminCompanyCompleted",       "Bir şirket profilini tamamladığında yöneticiye bildirim gönderilir.", nameof(s.AdminCompanyCompletedTemplateId),        s.AdminCompanyCompletedTemplateId),
+                ("AccountCreated",              "Yeni bir hesap oluşturulduğunda gönderilir.",                        nameof(s.AccountCreatedTemplateSlug),              s.AccountCreatedTemplateSlug),
+                ("AccountCompleted",            "Kullanıcı profilini tamamladığında gönderilir.",                     nameof(s.AccountCompletedTemplateSlug),            s.AccountCompletedTemplateSlug),
+                ("AccountApproved",             "Hesap başvurusu onaylandığında gönderilir.",                         nameof(s.AccountApprovedTemplateSlug),             s.AccountApprovedTemplateSlug),
+                ("AccountRejected",             "Hesap başvurusu reddedildiğinde gönderilir.",                        nameof(s.AccountRejectedTemplateSlug),             s.AccountRejectedTemplateSlug),
+                ("AccountFrozen",               "Hesap dondurulduğunda gönderilir.",                                  nameof(s.AccountFrozenTemplateSlug),               s.AccountFrozenTemplateSlug),
+                ("AccountDeleted",              "Hesap silindiğinde gönderilir.",                                     nameof(s.AccountDeletedTemplateSlug),              s.AccountDeletedTemplateSlug),
+                ("AccountDidNotCompleted.Step1","1. hatırlatma: Kullanıcı profili tamamlanmamış.",                    nameof(s.AccountDidNotCompletedStep1TemplateSlug), s.AccountDidNotCompletedStep1TemplateSlug),
+                ("AccountDidNotCompleted.Step2","2. hatırlatma: Kullanıcı profili tamamlanmamış.",                    nameof(s.AccountDidNotCompletedStep2TemplateSlug), s.AccountDidNotCompletedStep2TemplateSlug),
+                ("AccountDidNotCompleted.Step3","3. hatırlatma: Kullanıcı profili tamamlanmamış.",                    nameof(s.AccountDidNotCompletedStep3TemplateSlug), s.AccountDidNotCompletedStep3TemplateSlug),
+                ("AdminCompanyCompleted",       "Bir şirket profilini tamamladığında yöneticiye bildirim gönderilir.", nameof(s.AdminCompanyCompletedTemplateSlug),        s.AdminCompanyCompletedTemplateSlug),
             ];
 
-            // Parse all non-empty IDs so we can do a single bulk DB query
-            Dictionary<string, Ulid> parsedIds = slots
-                .Where(slot => !string.IsNullOrWhiteSpace(slot.RawId) && Ulid.TryParse(slot.RawId, out _))
-                .ToDictionary(
-                    slot => slot.Context,
-                    slot => Ulid.Parse(slot.RawId));
+            // Collect all configured slugs for a single bulk DB query
+            string[] slugs = slots
+                .Where(slot => !string.IsNullOrWhiteSpace(slot.Slug))
+                .Select(slot => slot.Slug)
+                .Distinct()
+                .ToArray();
 
-            // Single query for all referenced templates
-            Ulid[] templateIds = [.. parsedIds.Values.Distinct()];
-
-            Dictionary<Ulid, EmailTemplate> templates = await dbContext.EmailTemplates
+            Dictionary<string, EmailTemplate> templates = await dbContext.EmailTemplates
                 .AsNoTracking()
-                .Where(t => templateIds.Contains(t.Id))
-                .ToDictionaryAsync(t => t.Id, ct);
+                .Where(t => t.Slug != null && slugs.Contains(t.Slug))
+                .ToDictionaryAsync(t => t.Slug!, ct);
 
             List<SystemTemplateSlotDto> result = new(slots.Length);
 
-            foreach (var (context, description, settingsKey, rawId) in slots)
+            foreach (var (context, description, settingsKey, slug) in slots)
             {
-                if (string.IsNullOrWhiteSpace(rawId))
+                if (string.IsNullOrWhiteSpace(slug))
                 {
                     result.Add(new(context, description, settingsKey, SystemTemplateStatus.Empty, null));
                     continue;
                 }
 
-                if (!parsedIds.TryGetValue(context, out Ulid templateId))
-                {
-                    // Raw ID exists but couldn't be parsed as a Ulid — treat as misconfigured
-                    result.Add(new(context, description, settingsKey, SystemTemplateStatus.NotFound, null));
-                    continue;
-                }
-
-                if (!templates.TryGetValue(templateId, out EmailTemplate? template))
+                if (!templates.TryGetValue(slug, out EmailTemplate? template))
                 {
                     result.Add(new(context, description, settingsKey, SystemTemplateStatus.NotFound, null));
                     continue;
@@ -79,6 +68,7 @@ internal sealed class GetSystemTemplatesEndpoint : IEndpoint
                     template.HtmlContent,
                     template.IsArchived,
                     template.IsSystemTemplate,
+                    template.Slug,
                     template.CreatedAt,
                     template.UpdatedAt);
 

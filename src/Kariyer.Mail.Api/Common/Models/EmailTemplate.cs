@@ -10,6 +10,7 @@ public sealed class EmailTemplate
     public string HtmlContent { get; private set; }
     public bool IsArchived { get; private set; }
     public bool IsSystemTemplate { get; private set; }
+    public string? Slug { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
@@ -21,12 +22,13 @@ public sealed class EmailTemplate
         HtmlContent = htmlContent;
         IsArchived = false;
         IsSystemTemplate = false;
+        Slug = null;
         CreatedAt = DateTime.UtcNow;
     }
 
     // Used exclusively by System.Text.Json to reconstruct from cache — preserves the real Id
     [JsonConstructor]
-    private EmailTemplate(Ulid id, string name, string subjectTemplate, string htmlContent, bool isArchived, bool isSystemTemplate, DateTime createdAt, DateTime? updatedAt)
+    private EmailTemplate(Ulid id, string name, string subjectTemplate, string htmlContent, bool isArchived, bool isSystemTemplate, string? slug, DateTime createdAt, DateTime? updatedAt)
     {
         Id = id;
         Name = name;
@@ -34,6 +36,7 @@ public sealed class EmailTemplate
         HtmlContent = htmlContent;
         IsArchived = isArchived;
         IsSystemTemplate = isSystemTemplate;
+        Slug = slug;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
@@ -61,6 +64,19 @@ public sealed class EmailTemplate
     public void UnmarkAsSystemTemplate()
     {
         IsSystemTemplate = false;
+        Slug = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetSlug(string slug)
+    {
+        Slug = slug;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ClearSlug()
+    {
+        Slug = null;
         UpdatedAt = DateTime.UtcNow;
     }
 }

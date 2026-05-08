@@ -54,6 +54,7 @@ internal sealed class GetAllTemplatesEndpoint : IEndpoint
                     e.Name,
                     e.IsArchived,
                     e.IsSystemTemplate,
+                    e.Slug,
                     e.CreatedAt,
                     e.UpdatedAt
                 ))

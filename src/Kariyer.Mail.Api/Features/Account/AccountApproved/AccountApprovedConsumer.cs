@@ -40,20 +40,19 @@ internal sealed class AccountApprovedConsumer : IConsumer<AccountApprovedEvent>
 
         _logger.LogInformation("Processing Account Approved event for {FullName} [{Uid}]", message.FullName, message.Uid);
 
-        if (!Ulid.TryParse(_templateSettings.AccountApprovedTemplateId, out Ulid templateId))
+        string slug = _templateSettings.AccountApprovedTemplateSlug;
+        if (string.IsNullOrWhiteSpace(slug))
         {
-            activity?.SetStatus(ActivityStatusCode.Error, "Invalid Template ID Configuration");
-            throw new InvalidOperationException($"CRITICAL: AccountApprovedTemplateId is invalid or missing in configuration: '{_templateSettings.AccountApprovedTemplateId}'");
+            activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
+            throw new InvalidOperationException("CRITICAL: AccountApprovedTemplateSlug is missing in configuration.");
         }
 
-        activity?.SetTag("template.id", templateId.ToString());
-
-        EmailTemplate? template = await _templateService.GetTemplateAsync(templateId, context.CancellationToken);
+        EmailTemplate? template = await _templateService.GetBySlugAsync(slug, context.CancellationToken);
 
         if (template == null)
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
-            throw new Exception($"CRITICAL: Template [{templateId}] not found in Cache or Postgres. Cannot send Account Approved email to {message.Email}.");
+            throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot send Account Approved email to {message.Email}.");
         }
 
         Dictionary<string, string> templateData = new()

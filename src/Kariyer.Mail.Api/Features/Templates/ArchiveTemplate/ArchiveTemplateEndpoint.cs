@@ -27,7 +27,7 @@ internal sealed class ArchiveTemplateEndpoint : IEndpoint
             var guards = await dbContext.EmailTemplates
                 .AsNoTracking()
                 .Where(t => t.Id == id)
-                .Select(t => new { t.IsSystemTemplate, t.IsArchived })
+                .Select(t => new { t.IsSystemTemplate, t.IsArchived, t.Slug })
                 .FirstOrDefaultAsync(ct);
 
             if (guards == null)
@@ -65,6 +65,8 @@ internal sealed class ArchiveTemplateEndpoint : IEndpoint
             await garnet.KeyDeleteAsync("templates:all:archived_false");
             await garnet.KeyDeleteAsync("templates:all:archived_true");
             await garnet.KeyDeleteAsync($"template:detail:{id}");
+            if (!string.IsNullOrWhiteSpace(guards.Slug))
+                await garnet.KeyDeleteAsync($"template:slug:{guards.Slug}");
 
             logger.LogInformation("Successfully archived Template [{TemplateId}] and invalidated associated caches.", id);
 

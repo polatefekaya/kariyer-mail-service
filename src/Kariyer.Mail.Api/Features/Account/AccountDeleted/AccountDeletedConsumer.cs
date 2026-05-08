@@ -40,20 +40,19 @@ internal sealed class AccountDeletedConsumer : IConsumer<AccountDeletedEvent>
 
         _logger.LogInformation("Processing Account Deleted event for {Email} [{Uid}]", message.Email, message.Uid);
 
-        if (!Ulid.TryParse(_templateSettings.AccountDeletedTemplateId, out Ulid templateId))
+        string slug = _templateSettings.AccountDeletedTemplateSlug;
+        if (string.IsNullOrWhiteSpace(slug))
         {
-            activity?.SetStatus(ActivityStatusCode.Error, "Invalid Template ID Configuration");
-            throw new InvalidOperationException($"CRITICAL: AccountDeletedTemplateId is invalid or missing in configuration: '{_templateSettings.AccountDeletedTemplateId}'");
+            activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
+            throw new InvalidOperationException("CRITICAL: AccountDeletedTemplateSlug is missing in configuration.");
         }
 
-        activity?.SetTag("template.id", templateId.ToString());
-
-        EmailTemplate? template = await _templateService.GetTemplateAsync(templateId, context.CancellationToken);
+        EmailTemplate? template = await _templateService.GetBySlugAsync(slug, context.CancellationToken);
 
         if (template == null)
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
-            throw new Exception($"CRITICAL: Template [{templateId}] not found in Cache or Postgres. Cannot send Account Deleted email to {message.Email}.");
+            throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot send Account Deleted email to {message.Email}.");
         }
 
         Dictionary<string, string> templateData = new()

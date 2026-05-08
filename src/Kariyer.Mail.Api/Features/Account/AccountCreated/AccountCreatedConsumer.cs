@@ -41,20 +41,19 @@ internal sealed class AccountCreatedConsumer : IConsumer<AccountCreatedEvent>
 
         _logger.LogInformation("Processing Account Created event for {Email} [{Uid}]", message.Email, message.UserId);
 
-        if (!Ulid.TryParse(_templateSettings.AccountCreatedTemplateId, out Ulid templateId))
+        string slug = _templateSettings.AccountCreatedTemplateSlug;
+        if (string.IsNullOrWhiteSpace(slug))
         {
-            activity?.SetStatus(ActivityStatusCode.Error, "Invalid Template ID Configuration");
-            throw new InvalidOperationException($"CRITICAL: AccountCreatedTemplateId is invalid or missing in configuration: '{_templateSettings.AccountCreatedTemplateId}'");
+            activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
+            throw new InvalidOperationException("CRITICAL: AccountCreatedTemplateSlug is missing in configuration.");
         }
 
-        activity?.SetTag("template.id", templateId.ToString());
-
-        EmailTemplate? template = await _templateService.GetTemplateAsync(templateId, context.CancellationToken);
+        EmailTemplate? template = await _templateService.GetBySlugAsync(slug, context.CancellationToken);
 
         if (template == null)
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
-            throw new Exception($"CRITICAL: Template [{templateId}] not found in Cache or Postgres. Cannot send Account Created email to {message.Email}.");
+            throw new Exception($"CRITICAL: Template with slug '{slug}' not found in Cache or Postgres. Cannot send Account Created email to {message.Email}.");
         }
 
         Dictionary<string, string> templateData = new()

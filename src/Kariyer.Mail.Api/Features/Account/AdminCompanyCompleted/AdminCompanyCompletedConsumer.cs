@@ -44,17 +44,14 @@ internal sealed class AdminCompanyCompletedConsumer : IConsumer<CompanyCompleted
             throw new InvalidOperationException("CRITICAL: AdminNotificationEmail is missing in configuration.");
         }
 
-        if (!Ulid.TryParse(_templateSettings.AdminCompanyCompletedTemplateId, out Ulid templateId))
-        {
-            throw new InvalidOperationException($"CRITICAL: AdminCompanyCompletedTemplateId is invalid or missing: '{_templateSettings.AdminCompanyCompletedTemplateId}'");
-        }
+        string slug = _templateSettings.AdminCompanyCompletedTemplateSlug;
+        if (string.IsNullOrWhiteSpace(slug))
+            throw new InvalidOperationException("CRITICAL: AdminCompanyCompletedTemplateSlug is missing in configuration.");
 
-        EmailTemplate? template = await _templateService.GetTemplateAsync(templateId, context.CancellationToken);
+        EmailTemplate? template = await _templateService.GetBySlugAsync(slug, context.CancellationToken);
 
         if (template == null)
-        {
-            throw new Exception($"CRITICAL: Admin Template [{templateId}] not found. Cannot notify boss about company {message.CompanyName}.");
-        }
+            throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot notify admin about company {message.CompanyName}.");
 
         Dictionary<string, string> templateData = new()
         {

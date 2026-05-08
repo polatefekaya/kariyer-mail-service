@@ -37,7 +37,6 @@ internal sealed class MarkSystemTemplateEndpoint : IEndpoint
                     return Results.NotFound(new { Message = "Template not found." });
                 }
 
-                // Already a system template — idempotent success
                 logger.LogDebug("Template [{TemplateId}] was already marked as system template.", id);
                 return Results.NoContent();
             }

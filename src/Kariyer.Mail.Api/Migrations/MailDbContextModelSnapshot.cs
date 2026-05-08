@@ -198,6 +198,10 @@ namespace Kariyer.Mail.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Slug")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("SubjectTemplate")
                         .IsRequired()
                         .HasColumnType("text");
@@ -208,6 +212,10 @@ namespace Kariyer.Mail.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("IsArchived");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasFilter("\"Slug\" IS NOT NULL");
 
                     b.ToTable("EmailTemplates", "mail");
                 });

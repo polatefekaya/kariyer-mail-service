@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Kariyer.Mail.Api.Common.Models;
 using Kariyer.Mail.Api.Common.Persistence;
 using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Common.Web;
@@ -15,39 +16,39 @@ internal sealed class UnmarkSystemTemplateEndpoint : IEndpoint
             Ulid id,
             MailDbContext dbContext,
             IConnectionMultiplexer multiplexer,
+            ITemplateResolutionService templateService,
             ILogger<UnmarkSystemTemplateEndpoint> logger,
             CancellationToken ct) =>
         {
             using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("UnmarkSystemTemplate");
             activity?.SetTag("template.id", id.ToString());
 
-            int updatedCount = await dbContext.EmailTemplates
-                .Where(t => t.Id == id && t.IsSystemTemplate)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(t => t.IsSystemTemplate, false)
-                    .SetProperty(t => t.UpdatedAt, DateTime.UtcNow),
-                ct);
+            EmailTemplate? template = await dbContext.EmailTemplates.FirstOrDefaultAsync(t => t.Id == id, ct);
 
-            if (updatedCount == 0)
+            if (template == null)
             {
-                bool exists = await dbContext.EmailTemplates.AnyAsync(t => t.Id == id, ct);
-                if (!exists)
-                {
-                    logger.LogWarning("Unmark-system failed: Template [{TemplateId}] not found.", id);
-                    return Results.NotFound(new { Message = "Template not found." });
-                }
+                logger.LogWarning("Unmark-system failed: Template [{TemplateId}] not found.", id);
+                return Results.NotFound(new { Message = "Template not found." });
+            }
 
+            if (!template.IsSystemTemplate)
+            {
                 // Already not a system template — idempotent success
                 logger.LogDebug("Template [{TemplateId}] was already not a system template.", id);
                 return Results.NoContent();
             }
 
+            string? oldSlug = template.Slug;
+            template.UnmarkAsSystemTemplate(); // also clears Slug
+
+            await dbContext.SaveChangesAsync(ct);
+
             IDatabase garnet = multiplexer.GetDatabase();
             await garnet.KeyDeleteAsync("templates:all:archived_false");
             await garnet.KeyDeleteAsync("templates:all:archived_true");
-            await garnet.KeyDeleteAsync($"template:detail:{id}");
+            await templateService.InvalidateAsync(id, oldSlug);
 
-            logger.LogWarning("Template [{TemplateId}] unmarked as system template. It is now unprotected.", id);
+            logger.LogWarning("Template [{TemplateId}] (slug: {Slug}) unmarked as system template. Slug cleared. It is now unprotected.", id, oldSlug);
             return Results.NoContent();
         })
         .WithTags("Templates");

@@ -43,27 +43,25 @@ internal sealed class AccountDidNotCompletedConsumer : IConsumer<AccountDidNotCo
         _logger.LogInformation("Processing Incomplete Account Reminder (Step {Step}) for {Email} [{Uid}]", 
             message.ReminderStep, message.Email, message.Uid);
 
-        string templateIdString = message.ReminderStep switch
+        string slug = message.ReminderStep switch
         {
-            1 => _templateSettings.AccountDidNotCompletedStep1TemplateId,
-            2 => _templateSettings.AccountDidNotCompletedStep2TemplateId,
-            _ => _templateSettings.AccountDidNotCompletedStep3TemplateId
+            1 => _templateSettings.AccountDidNotCompletedStep1TemplateSlug,
+            2 => _templateSettings.AccountDidNotCompletedStep2TemplateSlug,
+            _ => _templateSettings.AccountDidNotCompletedStep3TemplateSlug
         };
 
-        if (!Ulid.TryParse(templateIdString, out Ulid templateId))
+        if (string.IsNullOrWhiteSpace(slug))
         {
-            activity?.SetStatus(ActivityStatusCode.Error, "Invalid Template ID Configuration");
-            throw new InvalidOperationException($"CRITICAL: Template ID for Reminder Step {message.ReminderStep} is invalid or missing in configuration: '{templateIdString}'");
+            activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
+            throw new InvalidOperationException($"CRITICAL: Template slug for Reminder Step {message.ReminderStep} is missing in configuration.");
         }
 
-        activity?.SetTag("template.id", templateId.ToString());
-
-        EmailTemplate? template = await _templateService.GetTemplateAsync(templateId, context.CancellationToken);
+        EmailTemplate? template = await _templateService.GetBySlugAsync(slug, context.CancellationToken);
 
         if (template == null)
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
-            throw new Exception($"CRITICAL: Template [{templateId}] not found in Cache or Postgres. Cannot send Step {message.ReminderStep} reminder email to {message.Email}.");
+            throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot send Step {message.ReminderStep} reminder email to {message.Email}.");
         }
 
         Dictionary<string, string> templateData = new()

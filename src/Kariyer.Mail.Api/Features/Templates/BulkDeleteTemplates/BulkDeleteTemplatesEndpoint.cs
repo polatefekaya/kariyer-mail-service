@@ -42,6 +42,14 @@ internal sealed class BulkDeleteTemplatesEndpoint : IEndpoint
 
             int deletedCount = 0;
 
+            // Capture slugs before deletion so we can invalidate slug caches
+            var toDeleteMeta = safeToDeleteIds.Length > 0
+                ? await dbContext.EmailTemplates
+                    .Where(t => safeToDeleteIds.Contains(t.Id))
+                    .Select(t => new { t.Id, t.Slug })
+                    .ToListAsync(ct)
+                : [];
+
             if (safeToDeleteIds.Length > 0)
             {
                 deletedCount = await dbContext.EmailTemplates
@@ -54,7 +62,7 @@ internal sealed class BulkDeleteTemplatesEndpoint : IEndpoint
                 IDatabase garnet = multiplexer.GetDatabase();
                 await garnet.KeyDeleteAsync("templates:all:archived_false");
                 await garnet.KeyDeleteAsync("templates:all:archived_true");
-                await Task.WhenAll(safeToDeleteIds.Select(id => templateService.InvalidateTemplateCacheAsync(id)));
+                await Task.WhenAll(toDeleteMeta.Select(m => templateService.InvalidateAsync(m.Id, m.Slug)));
             }
 
             logger.LogInformation("Bulk delete complete. Requested: {Requested}, Deleted: {Deleted}, Locked: {Locked}",
