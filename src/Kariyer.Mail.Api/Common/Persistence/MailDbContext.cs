@@ -11,6 +11,7 @@ internal sealed class MailDbContext : DbContext
     public DbSet<EmailTarget> EmailTargets => Set<EmailTarget>();
     public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
     public DbSet<EmailJobSchedule> EmailJobSchedules => Set<EmailJobSchedule>();
+    public DbSet<AdminNotificationRecipient> AdminNotificationRecipients => Set<AdminNotificationRecipient>();
 
     public MailDbContext(DbContextOptions<MailDbContext> options) : base(options) { }
 
@@ -37,6 +38,10 @@ internal sealed class MailDbContext : DbContext
 
         modelBuilder.Entity<EmailTemplate>()
             .HasIndex(t => t.IsArchived);
+
+        modelBuilder.Entity<AdminNotificationRecipient>()
+            .HasIndex(r => r.Email)
+            .IsUnique();
             
         modelBuilder.Entity<EmailJobSchedule>()
             .HasIndex(s => s.IsActive);

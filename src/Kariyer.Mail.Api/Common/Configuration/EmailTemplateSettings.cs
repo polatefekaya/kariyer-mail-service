@@ -16,6 +16,5 @@ public sealed class EmailTemplateSettings
     public string AccountApprovedTemplateSlug { get; init; } = string.Empty;
     public string AccountRejectedTemplateSlug { get; init; } = string.Empty;
 
-    public string AdminNotificationEmail { get; init; } = string.Empty;
     public string AdminCompanyCompletedTemplateSlug { get; init; } = string.Empty;
 }

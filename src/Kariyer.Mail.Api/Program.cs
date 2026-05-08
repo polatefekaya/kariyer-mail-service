@@ -14,6 +14,7 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using Scalar.AspNetCore;
 using Kariyer.Mail.Api.Common.Web.Filters;
+using Kariyer.Mail.Api.Features.AdminNotifications;
 using Kariyer.Mail.Api.Features.Templates;
 using Microsoft.Extensions.Options;
 
@@ -71,6 +72,7 @@ builder.Services.AddDbContext<MailDbContext>(opts => opts.UseNpgsql(dbConn));
 builder.Services.AddMessaging(rabbitMqConn);
 
 builder.Services.AddScoped<ITemplateResolutionService, TemplateResolutionService>();
+builder.Services.AddScoped<IAdminNotificationService, AdminNotificationService>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(
     ConnectionMultiplexer.Connect($"{garnetConn},abortConnect=false,connectRetry=3,connectTimeout=5000")
 );
