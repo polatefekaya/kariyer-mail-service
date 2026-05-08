@@ -39,9 +39,22 @@ internal sealed class MailDbContext : DbContext
         modelBuilder.Entity<EmailTemplate>()
             .HasIndex(t => t.IsArchived);
 
+        modelBuilder.Entity<EmailTemplate>()
+            .Property(t => t.Slug)
+            .HasMaxLength(100);
+
+        modelBuilder.Entity<EmailTemplate>()
+            .HasIndex(t => t.Slug)
+            .IsUnique()
+            .HasFilter("\"Slug\" IS NOT NULL");
+
         modelBuilder.Entity<AdminNotificationRecipient>()
             .HasIndex(r => r.Email)
             .IsUnique();
+
+        modelBuilder.Entity<AdminNotificationRecipient>()
+            .Property(r => r.IsActive)
+            .HasDefaultValue(true);
             
         modelBuilder.Entity<EmailJobSchedule>()
             .HasIndex(s => s.IsActive);
