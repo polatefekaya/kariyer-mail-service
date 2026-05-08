@@ -21,8 +21,31 @@ internal sealed class MarkSystemTemplateEndpoint : IEndpoint
             using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("MarkSystemTemplate");
             activity?.SetTag("template.id", id.ToString());
 
+            var guards = await dbContext.EmailTemplates
+                .Where(t => t.Id == id)
+                .Select(t => new { t.IsSystemTemplate, t.IsArchived })
+                .FirstOrDefaultAsync(ct);
+
+            if (guards == null)
+            {
+                logger.LogWarning("Mark-system failed: Template [{TemplateId}] not found.", id);
+                return Results.NotFound(new { Message = "Template not found." });
+            }
+
+            if (guards.IsArchived)
+            {
+                logger.LogWarning("Mark-system rejected: Template [{TemplateId}] is archived.", id);
+                return Results.BadRequest(new { Message = "Archived templates cannot be marked as system templates." });
+            }
+
+            if (guards.IsSystemTemplate)
+            {
+                logger.LogDebug("Template [{TemplateId}] was already marked as system template.", id);
+                return Results.NoContent();
+            }
+
             int updatedCount = await dbContext.EmailTemplates
-                .Where(t => t.Id == id && !t.IsSystemTemplate)
+                .Where(t => t.Id == id && !t.IsSystemTemplate && !t.IsArchived)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(t => t.IsSystemTemplate, true)
                     .SetProperty(t => t.UpdatedAt, DateTime.UtcNow),
@@ -30,15 +53,8 @@ internal sealed class MarkSystemTemplateEndpoint : IEndpoint
 
             if (updatedCount == 0)
             {
-                bool exists = await dbContext.EmailTemplates.AnyAsync(t => t.Id == id, ct);
-                if (!exists)
-                {
-                    logger.LogWarning("Mark-system failed: Template [{TemplateId}] not found.", id);
-                    return Results.NotFound(new { Message = "Template not found." });
-                }
-
-                logger.LogDebug("Template [{TemplateId}] was already marked as system template.", id);
-                return Results.NoContent();
+                logger.LogWarning("Mark-system failed: Template [{TemplateId}] state changed concurrently.", id);
+                return Results.Conflict(new { Message = "Template state changed concurrently. Please retry." });
             }
 
             IDatabase garnet = multiplexer.GetDatabase();

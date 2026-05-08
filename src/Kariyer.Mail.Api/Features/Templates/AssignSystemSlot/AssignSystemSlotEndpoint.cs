@@ -41,33 +41,60 @@ internal sealed class AssignSystemSlotEndpoint : IEndpoint
             activity?.SetTag("template.slug", slug);
             activity?.SetTag("template.id", templateId.ToString());
 
-            // If another template currently holds this slug, clear it first
-            EmailTemplate? existing = await dbContext.EmailTemplates
-                .FirstOrDefaultAsync(t => t.Slug == slug, ct);
-
-            if (existing != null && existing.Id != templateId)
-            {
-                string? existingSlug = existing.Slug;
-                existing.UnmarkAsSystemTemplate(); // clears slug + unmarks
-                await templateService.InvalidateAsync(existing.Id, existingSlug);
-                logger.LogWarning("Slug [{Slug}] moved from template [{OldId}] to [{NewId}].", slug, existing.Id, templateId);
-            }
-
+            // Fetch target early so we can validate before touching existing assignment
             EmailTemplate? target = await dbContext.EmailTemplates
                 .FirstOrDefaultAsync(t => t.Id == templateId, ct);
 
             if (target == null)
                 return Results.NotFound(new { Message = $"Template [{templateId}] not found." });
 
+            if (target.IsArchived)
+                return Results.BadRequest(new { Message = $"Template [{templateId}] is archived and cannot be assigned to a system slot." });
+
             if (target.Slug != null && target.Slug != slug)
                 return Results.Conflict(new { Message = $"Template [{templateId}] is already assigned to another slot (slug: '{target.Slug}'). Unassign it first." });
 
+            // Phase 1: clear the existing holder of this slug and save separately to avoid
+            // a unique constraint violation when both templates briefly share the same slug.
+            EmailTemplate? existing = await dbContext.EmailTemplates
+                .FirstOrDefaultAsync(t => t.Slug == slug && t.Id != templateId, ct);
+
+            IDatabase garnet = multiplexer.GetDatabase();
+
+            if (existing != null)
+            {
+                string? existingSlug = existing.Slug;
+                Ulid existingId = existing.Id;
+                existing.UnmarkAsSystemTemplate();
+                try
+                {
+                    await dbContext.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateException ex)
+                {
+                    logger.LogError(ex, "Phase-1 save failed while clearing slug [{Slug}] from template [{OldId}].", slug, existingId);
+                    return Results.Problem("Failed to clear existing slot assignment. Please retry.", statusCode: 500);
+                }
+                await garnet.KeyDeleteAsync("templates:all:archived_false");
+                await garnet.KeyDeleteAsync("templates:all:archived_true");
+                await templateService.InvalidateAsync(existingId, existingSlug);
+                logger.LogWarning("Slug [{Slug}] moved from template [{OldId}] to [{NewId}].", slug, existingId, templateId);
+            }
+
+            // Phase 2: assign slug to target
             target.MarkAsSystemTemplate();
             target.SetSlug(slug);
 
-            await dbContext.SaveChangesAsync(ct);
+            try
+            {
+                await dbContext.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("IX_EmailTemplates_Slug") == true)
+            {
+                logger.LogWarning(ex, "Concurrent assignment conflict for slug [{Slug}].", slug);
+                return Results.Conflict(new { Message = $"Slot [{settingsKey}] was just assigned by another request. Please refresh and retry." });
+            }
 
-            IDatabase garnet = multiplexer.GetDatabase();
             await garnet.KeyDeleteAsync("templates:all:archived_false");
             await garnet.KeyDeleteAsync("templates:all:archived_true");
             await templateService.InvalidateAsync(templateId, slug);
