@@ -4,6 +4,7 @@ using Kariyer.Mail.Api.Features.Account.AccountCreated;
 using Kariyer.Mail.Api.Features.Account.AccountCompleted;
 using Kariyer.Mail.Api.Features.Account.AccountDeleted;
 using Kariyer.Mail.Api.Features.Account.AccountDidNotCompleted;
+using Kariyer.Mail.Api.Features.Account.AccountDeletionCancelled;
 using Kariyer.Mail.Api.Features.Account.AccountFrozen;
 using Kariyer.Mail.Api.Features.BulkEmail;
 using Kariyer.Mail.Api.Features.DispatchEmail;
@@ -12,6 +13,9 @@ using Microsoft.Extensions.Options;
 using Kariyer.Mail.Api.Features.Account.AdminCompanyCompleted;
 using Kariyer.Mail.Api.Features.Account.AccountApproved;
 using Kariyer.Mail.Api.Features.Account.AccountRejected;
+using Kariyer.Mail.Api.Features.Account.AccountEmailChanged;
+using Kariyer.Mail.Api.Features.Account.AccountPhoneChanged;
+using Kariyer.Mail.Api.Features.Account.AccountUsernameChanged;
 
 namespace Kariyer.Mail.Api.Common.Messaging;
 
@@ -34,9 +38,13 @@ public static class MessagingExtensions
             x.AddConsumer<AccountCompletedConsumer>();
             x.AddConsumer<AccountFrozenConsumer>();
             x.AddConsumer<AccountDeletedConsumer>();
+            x.AddConsumer<AccountDeletionCancelledConsumer>();
             x.AddConsumer<AdminCompanyCompletedConsumer>();
             x.AddConsumer<AccountApprovedConsumer>();
             x.AddConsumer<AccountRejectedConsumer>();
+            x.AddConsumer<AccountEmailChangedConsumer>();
+            x.AddConsumer<AccountPhoneChangedConsumer>();
+            x.AddConsumer<AccountUsernameChangedConsumer>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -123,6 +131,16 @@ public static class MessagingExtensions
                     e.ConfigureConsumer<AccountDeletedConsumer>(context);
                 });
 
+                cfg.ReceiveEndpoint("mail.account.deletion-cancelled", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("identity.account.deletion-cancelled", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<AccountDeletionCancelledConsumer>(context);
+                });
+
                 cfg.ReceiveEndpoint("mail.account.approved", e =>
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
@@ -141,6 +159,36 @@ public static class MessagingExtensions
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.account.rejected", b => b.ExchangeType = "fanout");
                     e.ConfigureConsumer<AccountRejectedConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("mail.account.email-changed", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("identity.account.email-changed", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<AccountEmailChangedConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("mail.account.phone-changed", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("identity.account.phone-changed", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<AccountPhoneChangedConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("mail.account.username-changed", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("identity.account.username-changed", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<AccountUsernameChangedConsumer>(context);
                 });
 
             });

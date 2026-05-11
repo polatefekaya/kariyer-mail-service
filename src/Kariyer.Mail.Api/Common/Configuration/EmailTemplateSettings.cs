@@ -17,4 +17,10 @@ public sealed class EmailTemplateSettings
     public string AccountRejectedTemplateSlug { get; init; } = string.Empty;
 
     public string AdminCompanyCompletedTemplateSlug { get; init; } = string.Empty;
+
+    public string AccountDeletionCancelledTemplateSlug { get; init; } = string.Empty;
+
+    public string AccountEmailChangedTemplateSlug { get; init; } = string.Empty;
+    public string AccountPhoneChangedTemplateSlug { get; init; } = string.Empty;
+    public string AccountUsernameChangedTemplateSlug { get; init; } = string.Empty;
 }
