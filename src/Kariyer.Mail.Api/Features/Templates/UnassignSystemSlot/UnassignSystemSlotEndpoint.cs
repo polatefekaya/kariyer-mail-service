@@ -71,6 +71,10 @@ internal sealed class UnassignSystemSlotEndpoint : IEndpoint
         nameof(s.AccountDidNotCompletedStep2TemplateSlug) => s.AccountDidNotCompletedStep2TemplateSlug,
         nameof(s.AccountDidNotCompletedStep3TemplateSlug) => s.AccountDidNotCompletedStep3TemplateSlug,
         nameof(s.AdminCompanyCompletedTemplateSlug)       => s.AdminCompanyCompletedTemplateSlug,
+        nameof(s.AccountDeletionCancelledTemplateSlug)    => s.AccountDeletionCancelledTemplateSlug,
+        nameof(s.AccountEmailChangedTemplateSlug)         => s.AccountEmailChangedTemplateSlug,
+        nameof(s.AccountPhoneChangedTemplateSlug)         => s.AccountPhoneChangedTemplateSlug,
+        nameof(s.AccountUsernameChangedTemplateSlug)      => s.AccountUsernameChangedTemplateSlug,
         _ => null
     };
 }

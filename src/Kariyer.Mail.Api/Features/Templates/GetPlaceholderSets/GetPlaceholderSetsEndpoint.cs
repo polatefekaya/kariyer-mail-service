@@ -65,6 +65,30 @@ internal sealed class GetPlaceholderSetsEndpoint : IEndpoint
             new("SubmittedAt",      "{{ SubmittedAt }}",      "08.05.2026 12:00"),
         ]),
 
+        new("AccountDeletionCancelled", "Triggered when an account deletion request is cancelled.",
+        [
+            new("FullName", "{{ FullName }}", "Ahmet Yılmaz"),
+        ]),
+
+        new("AccountEmailChanged", "Triggered when a user's email address is changed.",
+        [
+            new("FullName",  "{{ FullName }}",  "Ahmet Yılmaz"),
+            new("OldEmail",  "{{ OldEmail }}",  "eski@example.com"),
+            new("NewEmail",  "{{ NewEmail }}",  "yeni@example.com"),
+        ]),
+
+        new("AccountPhoneChanged", "Triggered when a user's phone number is changed.",
+        [
+            new("FullName",  "{{ FullName }}",  "Ahmet Yılmaz"),
+            new("NewPhone",  "{{ NewPhone }}",  "+90 212 000 0000"),
+        ]),
+
+        new("AccountUsernameChanged", "Triggered when a user's username is changed.",
+        [
+            new("FullName",     "{{ FullName }}",     "Ahmet Yılmaz"),
+            new("NewUsername",  "{{ NewUsername }}",  "ahmetyilmaz"),
+        ]),
+
         new("BulkEmail", "Used in manually triggered bulk email jobs. Available metadata depends on the job's filter/payload.",
         [
             new("Email", "{{ Email }}", "user@example.com"),

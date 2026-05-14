@@ -31,6 +31,10 @@ internal sealed class GetSystemTemplatesEndpoint : IEndpoint
                 ("AccountDidNotCompleted.Step2","2. hatırlatma: Kullanıcı profili tamamlanmamış.",                    nameof(s.AccountDidNotCompletedStep2TemplateSlug), s.AccountDidNotCompletedStep2TemplateSlug),
                 ("AccountDidNotCompleted.Step3","3. hatırlatma: Kullanıcı profili tamamlanmamış.",                    nameof(s.AccountDidNotCompletedStep3TemplateSlug), s.AccountDidNotCompletedStep3TemplateSlug),
                 ("AdminCompanyCompleted",       "Bir şirket profilini tamamladığında yöneticiye bildirim gönderilir.", nameof(s.AdminCompanyCompletedTemplateSlug),        s.AdminCompanyCompletedTemplateSlug),
+                ("AccountDeletionCancelled",    "Hesap silme talebi iptal edildiğinde gönderilir.",                   nameof(s.AccountDeletionCancelledTemplateSlug),    s.AccountDeletionCancelledTemplateSlug),
+                ("AccountEmailChanged",         "Hesap e-posta adresi değiştirildiğinde gönderilir.",                 nameof(s.AccountEmailChangedTemplateSlug),         s.AccountEmailChangedTemplateSlug),
+                ("AccountPhoneChanged",         "Hesap telefon numarası değiştirildiğinde gönderilir.",               nameof(s.AccountPhoneChangedTemplateSlug),         s.AccountPhoneChangedTemplateSlug),
+                ("AccountUsernameChanged",      "Hesap kullanıcı adı değiştirildiğinde gönderilir.",                  nameof(s.AccountUsernameChangedTemplateSlug),      s.AccountUsernameChangedTemplateSlug),
             ];
 
             // Collect all configured slugs for a single bulk DB query
