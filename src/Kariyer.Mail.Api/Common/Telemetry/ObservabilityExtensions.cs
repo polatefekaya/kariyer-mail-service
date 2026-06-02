@@ -77,6 +77,7 @@ public static class ObservabilityExtensions
         // UseSerilogRequestLogging() depends on DiagnosticContext which is normally
         // registered by builder.Host.UseSerilog(). Since we use AddSerilog() instead
         // (to keep the OTel logging provider alive), we register them manually here.
+        builder.Services.AddSingleton<Serilog.ILogger>(Log.Logger);
         builder.Services.AddSingleton<Serilog.Extensions.Hosting.DiagnosticContext>();
         builder.Services.AddSingleton<Serilog.IDiagnosticContext>(sp =>
             sp.GetRequiredService<Serilog.Extensions.Hosting.DiagnosticContext>());
