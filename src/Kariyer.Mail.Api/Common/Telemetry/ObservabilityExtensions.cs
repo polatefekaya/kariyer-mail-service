@@ -1,5 +1,6 @@
 using OpenTelemetry;
 using OpenTelemetry.Context.Propagation;
+using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -89,7 +90,11 @@ public static class ObservabilityExtensions
             opts.IncludeScopes = true;
             opts.ParseStateValues = true;
             opts.SetResourceBuilder(resourceBuilder);
-            opts.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+            opts.AddOtlpExporter(o =>
+            {
+                o.Endpoint = new Uri(otlpEndpoint.TrimEnd('/') + "/v1/logs");
+                o.Protocol = OtlpExportProtocol.HttpProtobuf;
+            });
         });
 
         // SigNoz gets Information+ only — Debug/Trace stay local on the console
@@ -123,7 +128,11 @@ public static class ObservabilityExtensions
                 tracing.AddSource("MassTransit");
                 tracing.AddSource(DiagnosticsConfig.ServiceName);
 
-                tracing.AddOtlpExporter(opts => opts.Endpoint = new Uri(otlpEndpoint));
+                tracing.AddOtlpExporter(opts =>
+                {
+                    opts.Endpoint = new Uri(otlpEndpoint.TrimEnd('/') + "/v1/traces");
+                    opts.Protocol = OtlpExportProtocol.HttpProtobuf;
+                });
             })
             .WithMetrics(metrics =>
             {
@@ -135,7 +144,11 @@ public static class ObservabilityExtensions
                 metrics.AddMeter("MassTransit");
                 metrics.AddMeter(DiagnosticsConfig.ServiceName);
 
-                metrics.AddOtlpExporter(opts => opts.Endpoint = new Uri(otlpEndpoint));
+                metrics.AddOtlpExporter(opts =>
+                {
+                    opts.Endpoint = new Uri(otlpEndpoint.TrimEnd('/') + "/v1/metrics");
+                    opts.Protocol = OtlpExportProtocol.HttpProtobuf;
+                });
 
                 metrics.AddPrometheusExporter();
             });
