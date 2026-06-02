@@ -13,12 +13,36 @@ public static class ObservabilityExtensions
 {
     public static WebApplicationBuilder AddObservability(this WebApplicationBuilder builder)
     {
-        string env = builder.Environment.EnvironmentName;
+        // ── Resource identity — one source of truth for all three signals ────────
+        // deployment.environment can be overridden independently from ASPNETCORE_ENVIRONMENT
+        // via OTEL_RESOURCE_ATTRIBUTES or Observability:DeploymentEnvironment config.
+        string deploymentEnv =
+            Environment.GetEnvironmentVariable("DEPLOYMENT_ENVIRONMENT")
+            ?? builder.Configuration["Observability:DeploymentEnvironment"]
+            ?? builder.Environment.EnvironmentName;
 
-        // Standard OTel env var first, then config fallback
-        string otlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT")
+        string serviceVersion =
+            builder.Configuration["Observability:ServiceVersion"] ?? "unknown";
+
+        string otlpEndpoint =
+            Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT")
             ?? builder.Configuration["Observability:OtlpEndpoint"]
             ?? "http://localhost:4317";
+
+        Dictionary<string, object> resourceAttributes = new()
+        {
+            ["service.name"] = DiagnosticsConfig.ServiceName,
+            ["service.version"] = serviceVersion,
+            ["deployment.environment"] = deploymentEnv,
+            ["host.name"] = Environment.MachineName,
+        };
+
+        // Single ResourceBuilder shared by OTel logging provider and the SDK
+        ResourceBuilder resourceBuilder = ResourceBuilder.CreateDefault()
+            .AddService(
+                serviceName: DiagnosticsConfig.ServiceName,
+                serviceVersion: serviceVersion)
+            .AddAttributes(resourceAttributes);
 
         // Explicit W3C propagators: traceparent + baggage (frontend sends both)
         Sdk.SetDefaultTextMapPropagator(new CompositeTextMapPropagator(new TextMapPropagator[]
@@ -27,17 +51,7 @@ public static class ObservabilityExtensions
             new BaggagePropagator(),
         }));
 
-        ResourceBuilder resource = ResourceBuilder.CreateDefault()
-            .AddService(
-                serviceName: DiagnosticsConfig.ServiceName,
-                serviceVersion: builder.Configuration["Observability:ServiceVersion"] ?? "unknown")
-            .AddAttributes(new Dictionary<string, object>
-            {
-                ["deployment.environment"] = env,
-                ["host.name"] = Environment.MachineName,
-            });
-
-        // ── Serilog — structured console only; SigNoz receives logs via OTLP below ──
+        // ── Serilog — console only; all resource fields enriched to match SigNoz ─
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
@@ -45,16 +59,17 @@ public static class ObservabilityExtensions
             .MinimumLevel.Override("Hangfire", LogEventLevel.Warning)
             .MinimumLevel.Override("MassTransit", LogEventLevel.Warning)
             .Enrich.FromLogContext()
-            .Enrich.WithProperty("Service", DiagnosticsConfig.ServiceName)
-            .Enrich.WithProperty("Environment", env)
+            .Enrich.WithProperty("service.name", DiagnosticsConfig.ServiceName)
+            .Enrich.WithProperty("service.version", serviceVersion)
+            .Enrich.WithProperty("deployment.environment", deploymentEnv)
+            .Enrich.WithProperty("host.name", Environment.MachineName)
             .Enrich.With<ActivityEnricher>()
             .WriteTo.Console(
-                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {TraceId} {Message:lj}{NewLine}{Exception}")
+                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{deployment.environment}] {TraceId} {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
 
-        // Do NOT use UseSerilog() — it strips every other ILoggerProvider including OTel.
-        // SetMinimumLevel(Trace) disables the ILoggingBuilder pre-filter so every message
-        // reaches Serilog and OTel. Each provider then applies its own level rules.
+        // SetMinimumLevel(Trace) disables the ILoggingBuilder pre-filter so every
+        // message reaches Serilog and OTel; each provider applies its own level rules.
         builder.Logging.ClearProviders();
         builder.Logging.SetMinimumLevel(LogLevel.Trace);
         builder.Logging.AddSerilog(Log.Logger, dispose: true);
@@ -65,22 +80,20 @@ public static class ObservabilityExtensions
             opts.IncludeFormattedMessage = true;
             opts.IncludeScopes = true;
             opts.ParseStateValues = true;
-            opts.SetResourceBuilder(resource);
+            opts.SetResourceBuilder(resourceBuilder);
             opts.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
         });
 
-        // SigNoz gets Information+ only — no need to flood it with Debug/Trace
-        builder.Logging.AddFilter<OpenTelemetry.Logs.OpenTelemetryLoggerProvider>(null, LogLevel.Information);
+        // SigNoz gets Information+ only — Debug/Trace stay local on the console
+        builder.Logging.AddFilter<OpenTelemetryLoggerProvider>(null, LogLevel.Information);
 
         // ── OTel traces + metrics → SigNoz via OTLP ─────────────────────────────
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(r => r
-                .AddService(DiagnosticsConfig.ServiceName)
-                .AddAttributes(new Dictionary<string, object>
-                {
-                    ["deployment.environment"] = env,
-                    ["host.name"] = Environment.MachineName,
-                }))
+                .AddService(
+                    serviceName: DiagnosticsConfig.ServiceName,
+                    serviceVersion: serviceVersion)
+                .AddAttributes(resourceAttributes))
             .WithTracing(tracing =>
             {
                 tracing.AddAspNetCoreInstrumentation(opts =>
@@ -116,7 +129,6 @@ public static class ObservabilityExtensions
 
                 metrics.AddOtlpExporter(opts => opts.Endpoint = new Uri(otlpEndpoint));
 
-                // Keep Prometheus for local scraping if needed
                 metrics.AddPrometheusExporter();
             });
 
