@@ -143,6 +143,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 app.UseCors("MailCorsPolicy");
+app.UseMiddleware<BaggageEnrichmentMiddleware>();
 app.UseSerilogRequestLogging();
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {

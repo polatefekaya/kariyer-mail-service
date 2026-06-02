@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Kariyer.Mail.Api.Common.Models;
 using Kariyer.Mail.Api.Common.Persistence;
+using Kariyer.Mail.Api.Common.Telemetry;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 
@@ -28,16 +30,25 @@ internal sealed class TemplateResolutionService : ITemplateResolutionService
 
     public async Task<EmailTemplate?> GetTemplateAsync(Ulid templateId, CancellationToken ct = default)
     {
+        using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ResolveTemplateById");
+        activity?.SetTag("template.id", templateId.ToString());
+
         IDatabase db = _garnet.GetDatabase();
         string key = IdKey(templateId);
 
         RedisValue cached = await db.StringGetAsync(key);
         if (cached.HasValue)
         {
+            DiagnosticsConfig.TemplateCacheHitsCounter.Add(1,
+                new KeyValuePair<string, object?>("lookup", "id"));
+            activity?.SetTag("cache.hit", true);
             _logger.LogDebug("Cache HIT for template [{TemplateId}]", templateId);
             return JsonSerializer.Deserialize<EmailTemplate>(cached.ToString()!);
         }
 
+        DiagnosticsConfig.TemplateCacheMissesCounter.Add(1,
+            new KeyValuePair<string, object?>("lookup", "id"));
+        activity?.SetTag("cache.hit", false);
         _logger.LogDebug("Cache MISS for template [{TemplateId}]. Hitting PostgreSQL...", templateId);
 
         EmailTemplate? template = await _dbContext.EmailTemplates
@@ -47,21 +58,31 @@ internal sealed class TemplateResolutionService : ITemplateResolutionService
         if (template != null)
             await PopulateCacheAsync(db, template);
 
+        activity?.SetStatus(template is not null ? ActivityStatusCode.Ok : ActivityStatusCode.Error, "Template not found");
         return template;
     }
 
     public async Task<EmailTemplate?> GetBySlugAsync(string slug, CancellationToken ct = default)
     {
+        using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ResolveTemplateBySlug");
+        activity?.SetTag("template.slug", slug);
+
         IDatabase db = _garnet.GetDatabase();
         string key = SlugKey(slug);
 
         RedisValue cached = await db.StringGetAsync(key);
         if (cached.HasValue)
         {
+            DiagnosticsConfig.TemplateCacheHitsCounter.Add(1,
+                new KeyValuePair<string, object?>("lookup", "slug"));
+            activity?.SetTag("cache.hit", true);
             _logger.LogDebug("Cache HIT for slug [{Slug}]", slug);
             return JsonSerializer.Deserialize<EmailTemplate>(cached.ToString()!);
         }
 
+        DiagnosticsConfig.TemplateCacheMissesCounter.Add(1,
+            new KeyValuePair<string, object?>("lookup", "slug"));
+        activity?.SetTag("cache.hit", false);
         _logger.LogDebug("Cache MISS for slug [{Slug}]. Hitting PostgreSQL...", slug);
 
         EmailTemplate? template = await _dbContext.EmailTemplates
@@ -71,6 +92,7 @@ internal sealed class TemplateResolutionService : ITemplateResolutionService
         if (template != null)
             await PopulateCacheAsync(db, template);
 
+        activity?.SetStatus(template is not null ? ActivityStatusCode.Ok : ActivityStatusCode.Error, "Template not found");
         return template;
     }
 

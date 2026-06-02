@@ -35,6 +35,7 @@ internal sealed class AccountFrozenConsumer : IConsumer<AccountFrozenEvent>
         AccountFrozenEvent message = context.Message;
 
         using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ProcessAccountFrozenEvent");
+        activity?.SetTag("mail.event_type", "account.frozen");
         activity?.SetTag("user.uid", message.Uid);
         activity?.SetTag("message.id", message.MessageId);
         activity?.SetTag("freeze.reason", message.Reason);
@@ -42,6 +43,7 @@ internal sealed class AccountFrozenConsumer : IConsumer<AccountFrozenEvent>
         _logger.LogInformation("Processing Account Frozen event for {Email} [{Uid}]. Reason: {Reason}", message.Email, message.Uid, message.Reason);
 
         string slug = _templateSettings.AccountFrozenTemplateSlug;
+        activity?.SetTag("mail.template_slug", slug);
         if (string.IsNullOrWhiteSpace(slug))
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
@@ -52,6 +54,7 @@ internal sealed class AccountFrozenConsumer : IConsumer<AccountFrozenEvent>
 
         if (template == null)
         {
+            DiagnosticsConfig.TemplateNotFoundCounter.Add(1, new KeyValuePair<string, object?>("slug", slug));
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
             throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot send Account Frozen email to {message.Email}.");
         }

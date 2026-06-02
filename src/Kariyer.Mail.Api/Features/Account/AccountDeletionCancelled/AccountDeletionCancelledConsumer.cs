@@ -35,6 +35,7 @@ internal sealed class AccountDeletionCancelledConsumer : IConsumer<AccountDeleti
         AccountDeletionCancelledEvent message = context.Message;
 
         using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ProcessAccountDeletionCancelledEvent");
+        activity?.SetTag("mail.event_type", "account.deletion_cancelled");
         activity?.SetTag("user.uid", message.Uid);
         activity?.SetTag("message.id", message.MessageId);
         activity?.SetTag("cancelled_by", message.CancelledByUid);
@@ -43,6 +44,7 @@ internal sealed class AccountDeletionCancelledConsumer : IConsumer<AccountDeleti
             message.Email, message.Uid, message.CancelledByUid);
 
         string slug = _templateSettings.AccountDeletionCancelledTemplateSlug;
+        activity?.SetTag("mail.template_slug", slug);
         if (string.IsNullOrWhiteSpace(slug))
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
@@ -53,6 +55,7 @@ internal sealed class AccountDeletionCancelledConsumer : IConsumer<AccountDeleti
 
         if (template == null)
         {
+            DiagnosticsConfig.TemplateNotFoundCounter.Add(1, new KeyValuePair<string, object?>("slug", slug));
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
             throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot send Account Deletion Cancelled email to {message.Email}.");
         }

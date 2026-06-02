@@ -39,6 +39,7 @@ internal sealed class AdminCompanyCompletedConsumer : IConsumer<CompanyCompleted
         CompanyCompletedEvent message = context.Message;
 
         using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ProcessAdminCompanyCompletedNotification");
+        activity?.SetTag("mail.event_type", "admin.company_completed");
         activity?.SetTag("company.uid", message.CompanyUid);
 
         _logger.LogInformation("Generating Admin Notification for completed company profile: {CompanyName} [{Uid}]", message.CompanyName, message.CompanyUid);
@@ -48,10 +49,12 @@ internal sealed class AdminCompanyCompletedConsumer : IConsumer<CompanyCompleted
         if (recipientEmails.Count == 0)
         {
             _logger.LogWarning("No active admin notification recipients configured. Skipping notification for company {CompanyName}.", message.CompanyName);
+            activity?.SetStatus(ActivityStatusCode.Ok, "No recipients");
             return;
         }
 
         string slug = _templateSettings.AdminCompanyCompletedTemplateSlug;
+        activity?.SetTag("mail.template_slug", slug);
 
         if (string.IsNullOrWhiteSpace(slug))
             throw new InvalidOperationException("CRITICAL: AdminCompanyCompletedTemplateSlug is missing from configuration.");
@@ -59,7 +62,10 @@ internal sealed class AdminCompanyCompletedConsumer : IConsumer<CompanyCompleted
         EmailTemplate? template = await _templateService.GetBySlugAsync(slug, context.CancellationToken);
 
         if (template == null)
+        {
+            DiagnosticsConfig.TemplateNotFoundCounter.Add(1, new KeyValuePair<string, object?>("slug", slug));
             throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot notify admin about company {message.CompanyName}.");
+        }
 
         Dictionary<string, string> templateData = new()
         {
@@ -95,7 +101,9 @@ internal sealed class AdminCompanyCompletedConsumer : IConsumer<CompanyCompleted
             await context.Publish(dispatchCommand, context.CancellationToken);
         }
 
+        activity?.SetTag("mail.recipient_count", recipientEmails.Count);
         activity?.SetStatus(ActivityStatusCode.Ok);
-        _logger.LogInformation("Successfully dispatched Admin Notification to {Count} recipients for company: {CompanyName}", recipientEmails.Count, message.CompanyName);
+        _logger.LogInformation("Dispatched Admin Notification to {Count} recipients for company: {CompanyName} [{CompanyUid}]",
+            recipientEmails.Count, message.CompanyName, message.CompanyUid);
     }
 }

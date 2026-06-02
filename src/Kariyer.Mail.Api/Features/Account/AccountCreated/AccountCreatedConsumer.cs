@@ -35,13 +35,14 @@ internal sealed class AccountCreatedConsumer : IConsumer<AccountCreatedEvent>
         AccountCreatedEvent message = context.Message;
 
         using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ProcessAccountCreatedEvent");
+        activity?.SetTag("mail.event_type", "account.created");
         activity?.SetTag("user.uid", message.UserId);
-        //activity?.SetTag("message.id", message.UserId);
         activity?.SetTag("account.type", message.AccountType);
 
         _logger.LogInformation("Processing Account Created event for {Email} [{Uid}]", message.Email, message.UserId);
 
         string slug = _templateSettings.AccountCreatedTemplateSlug;
+        activity?.SetTag("mail.template_slug", slug);
         if (string.IsNullOrWhiteSpace(slug))
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
@@ -52,6 +53,7 @@ internal sealed class AccountCreatedConsumer : IConsumer<AccountCreatedEvent>
 
         if (template == null)
         {
+            DiagnosticsConfig.TemplateNotFoundCounter.Add(1, new KeyValuePair<string, object?>("slug", slug));
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
             throw new Exception($"CRITICAL: Template with slug '{slug}' not found in Cache or Postgres. Cannot send Account Created email to {message.Email}.");
         }

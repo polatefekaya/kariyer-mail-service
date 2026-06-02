@@ -35,6 +35,7 @@ internal sealed class AccountRejectedConsumer : IConsumer<AccountRejectedEvent>
         AccountRejectedEvent message = context.Message;
 
         using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ProcessAccountRejectedEvent");
+        activity?.SetTag("mail.event_type", "account.rejected");
         activity?.SetTag("account.uid", message.Uid);
         activity?.SetTag("message.id", message.MessageId);
         activity?.SetTag("rejection.reason", message.Reason);
@@ -42,6 +43,7 @@ internal sealed class AccountRejectedConsumer : IConsumer<AccountRejectedEvent>
         _logger.LogInformation("Processing Account Rejected event for {FullName} [{Uid}]. Reason: {Reason}", message.FullName, message.Uid, message.Reason);
 
         string slug = _templateSettings.AccountRejectedTemplateSlug;
+        activity?.SetTag("mail.template_slug", slug);
         if (string.IsNullOrWhiteSpace(slug))
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
@@ -52,6 +54,7 @@ internal sealed class AccountRejectedConsumer : IConsumer<AccountRejectedEvent>
 
         if (template == null)
         {
+            DiagnosticsConfig.TemplateNotFoundCounter.Add(1, new KeyValuePair<string, object?>("slug", slug));
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
             throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot send Account Rejected email to {message.Email}.");
         }

@@ -85,6 +85,9 @@ internal sealed class ResolverConsumer : IConsumer<StartBulkEmailJobCommand>
                 RedisValue isCancelled = await garnet.StringGetAsync($"job:cancelled:{job.Id}");
                 if (isCancelled.HasValue)
                 {
+                    DiagnosticsConfig.BulkJobsCancelledCounter.Add(1,
+                        new KeyValuePair<string, object?>("job_type", job.JobType.ToString()),
+                        new KeyValuePair<string, object?>("reason", "kill_switch"));
                     _logger.LogWarning("Job [{JobId}] was cancelled via Garnet kill switch at page {PageNumber}. Halting worker.", job.Id, pageNumber);
                     break;
                 }
@@ -150,7 +153,10 @@ internal sealed class ResolverConsumer : IConsumer<StartBulkEmailJobCommand>
             job.MarkAsCompleted();
             _dbContext.EmailJobs.Update(job);
             await _dbContext.SaveChangesAsync(context.CancellationToken);
-            
+
+            DiagnosticsConfig.BulkJobsCompletedCounter.Add(1,
+                new KeyValuePair<string, object?>("job_type", job.JobType.ToString()));
+
             jobActivity?.SetStatus(ActivityStatusCode.Ok);
             _logger.LogInformation("Job [{JobId}] completed. Total targets: {TotalTargets}", job.Id, totalProcessed);
         }
@@ -161,10 +167,13 @@ internal sealed class ResolverConsumer : IConsumer<StartBulkEmailJobCommand>
 
             _logger.LogError(ex, "Catastrophic failure in Job [{JobId}]: {ErrorMessage}", job.Id, ex.Message);
 
+            DiagnosticsConfig.BulkJobsFailedCounter.Add(1,
+                new KeyValuePair<string, object?>("job_type", job.JobType.ToString()));
+
             job.MarkAsFailed(ex.Message);
             _dbContext.EmailJobs.Update(job);
             await _dbContext.SaveChangesAsync(context.CancellationToken);
-            throw; 
+            throw;
         }
     }
 }

@@ -42,6 +42,8 @@ internal sealed class StartBulkJobEndpoint : IEndpoint
 
             if (!isFirstRequest)
             {
+                DiagnosticsConfig.IdempotencyBlockedCounter.Add(1,
+                    new KeyValuePair<string, object?>("endpoint", "bulk_job"));
                 logger.LogInformation("Idempotency lock triggered. Blocked duplicate request for Key [{IdempotencyKey}].", idempotencyKey);
                 return Results.Conflict(new { Message = "Duplicate request detected and blocked." });
             }
@@ -65,8 +67,11 @@ internal sealed class StartBulkJobEndpoint : IEndpoint
                 await publishEndpoint.Publish(command, ct);
                 await dbContext.SaveChangesAsync(ct);
                 
+                DiagnosticsConfig.BulkJobsStartedCounter.Add(1,
+                    new KeyValuePair<string, object?>("job_type", request.JobType.ToString()));
+
                 logger.LogInformation("Successfully initiated Bulk Job [{JobId}] of type {JobType}. Handed off to MassTransit.", job.Id, request.JobType);
-                
+
                 return Results.Accepted($"jobs/bulk/{job.Id}", new { JobId = job.Id });
             }
             catch (Exception ex)

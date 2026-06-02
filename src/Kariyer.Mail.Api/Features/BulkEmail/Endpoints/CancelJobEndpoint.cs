@@ -60,8 +60,13 @@ internal sealed class CancelJobEndpoint : IEndpoint
 
                 await dbContext.SaveChangesAsync(ct);
 
-                logger.LogInformation("Job [{JobId}] successfully cancelled. {CancelledCount} pending targets were halted.", jobId, cancelledCount);
+                DiagnosticsConfig.BulkJobsCancelledCounter.Add(1,
+                    new KeyValuePair<string, object?>("job_type", job.JobType.ToString()));
+
+                activity?.SetStatus(ActivityStatusCode.Ok);
                 activity?.SetTag("targets.halted", cancelledCount);
+
+                logger.LogInformation("Job [{JobId}] successfully cancelled. {CancelledCount} pending targets were halted.", jobId, cancelledCount);
 
                 return Results.Ok(new { Message = "Job cancelled.", TargetsHalted = cancelledCount });
             }

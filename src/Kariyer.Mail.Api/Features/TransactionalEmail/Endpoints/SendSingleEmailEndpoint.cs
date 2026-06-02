@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using Kariyer.Mail.Api.Common.Models;
 using Kariyer.Mail.Api.Common.Persistence;
+using Kariyer.Mail.Api.Common.Telemetry;
 using Kariyer.Mail.Api.Common.Web;
 using Kariyer.Mail.Api.Features.DispatchEmail;
 using Kariyer.Mail.Api.Features.TransactionalEmail.Contracts;
@@ -19,11 +21,18 @@ internal sealed class SendSingleEmailEndpoint : IEndpoint
             MailDbContext dbContext,
             IPublishEndpoint publishEndpoint,
             IConnectionMultiplexer multiplexer,
+            ILogger<SendSingleEmailEndpoint> logger,
             CancellationToken ct) =>
         {
+            using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("SendTransactionalEmail");
+
             string? idempotencyKey = req.Headers["X-Idempotency-Key"];
+            activity?.SetTag("http.idempotency_key", idempotencyKey);
+            activity?.SetTag("mail.recipient_type", "transactional");
+
             if (string.IsNullOrWhiteSpace(idempotencyKey))
             {
+                logger.LogWarning("Rejected transactional email: missing X-Idempotency-Key.");
                 return Results.BadRequest(new { Message = "X-Idempotency-Key header is strictly required for transactional emails." });
             }
 
@@ -36,11 +45,15 @@ internal sealed class SendSingleEmailEndpoint : IEndpoint
 
             if (!isFirstRequest)
             {
+                DiagnosticsConfig.IdempotencyBlockedCounter.Add(1,
+                    new KeyValuePair<string, object?>("endpoint", "transactional"));
+                logger.LogInformation("Idempotency blocked duplicate transactional request [{Key}].", idempotencyKey);
                 return Results.Conflict(new { Message = "Duplicate request detected and blocked." });
             }
 
             string finalSubject = request.Subject ?? string.Empty;
             string finalBody = request.BodyTemplate ?? string.Empty;
+            string? templateSlug = null;
 
             if (request.TemplateId.HasValue)
             {
@@ -52,9 +65,13 @@ internal sealed class SendSingleEmailEndpoint : IEndpoint
                 {
                     finalSubject = template.SubjectTemplate;
                     finalBody = template.HtmlContent;
+                    templateSlug = template.Slug;
+                    activity?.SetTag("mail.template_id", request.TemplateId.Value.ToString());
+                    activity?.SetTag("mail.template_slug", templateSlug ?? "unnamed");
                 }
                 else
                 {
+                    logger.LogWarning("Transactional email requested template [{TemplateId}] but it was not found.", request.TemplateId.Value);
                     return Results.BadRequest(new { Message = $"Template [{request.TemplateId.Value}] not found." });
                 }
             }
@@ -64,36 +81,54 @@ internal sealed class SendSingleEmailEndpoint : IEndpoint
                 return Results.BadRequest(new { Message = "Subject and Body must be provided either directly or via a valid TemplateId." });
             }
 
-            EmailTarget target = new(
-                jobId: null,
-                recipientUserId: request.UserId,
-                recipientEmail: request.Email,
-                subject: finalSubject,
-                body: finalBody
-            );
-
-            await dbContext.EmailTargets.AddAsync(target, ct);
-
-            Dictionary<string, string> templateData = request.TemplateData ?? new Dictionary<string, string>();
-            if (!templateData.ContainsKey("Email"))
+            try
             {
-                templateData.Add("Email", target.RecipientEmail);
+                EmailTarget target = new(
+                    jobId: null,
+                    recipientUserId: request.UserId,
+                    recipientEmail: request.Email,
+                    subject: finalSubject,
+                    body: finalBody
+                );
+
+                await dbContext.EmailTargets.AddAsync(target, ct);
+
+                Dictionary<string, string> templateData = request.TemplateData ?? new Dictionary<string, string>();
+                if (!templateData.ContainsKey("Email"))
+                    templateData.Add("Email", target.RecipientEmail);
+
+                DispatchEmailCommand command = new()
+                {
+                    JobId = null,
+                    TargetId = target.Id,
+                    Email = target.RecipientEmail,
+                    Subject = finalSubject,
+                    RawTemplate = finalBody,
+                    TemplateData = templateData
+                };
+
+                await publishEndpoint.Publish(command, ct);
+                await dbContext.SaveChangesAsync(ct);
+
+                activity?.SetTag("mail.target_id", target.Id.ToString());
+                activity?.SetStatus(ActivityStatusCode.Ok);
+
+                DiagnosticsConfig.TransactionalEmailsSentCounter.Add(1,
+                    new KeyValuePair<string, object?>("template", templateSlug ?? "inline"));
+
+                logger.LogInformation(
+                    "Accepted transactional email for {RecipientEmail}, TargetId [{TargetId}].",
+                    target.RecipientEmail, target.Id);
+
+                return Results.Accepted($"transactional/status/{target.Id}", new { TargetId = target.Id });
             }
-
-            DispatchEmailCommand command = new (){
-                JobId = null,
-                TargetId = target.Id,
-                Email = target.RecipientEmail,
-                Subject = finalSubject,
-                RawTemplate = finalBody,
-                TemplateData = templateData
-            };
-
-            await publishEndpoint.Publish(command, ct);
-
-            await dbContext.SaveChangesAsync(ct);
-
-            return Results.Accepted($"transactional/status/{target.Id}", new { TargetId = target.Id });
+            catch (Exception ex)
+            {
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.AddException(ex);
+                logger.LogError(ex, "Failed to accept transactional email for idempotency key [{Key}].", idempotencyKey);
+                throw;
+            }
         })
         .WithTags("Transactional Email");
     }

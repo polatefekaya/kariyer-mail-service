@@ -23,6 +23,8 @@ public static class MessagingExtensions
 {
     public static IServiceCollection AddMessaging(this IServiceCollection services, string rabbitConn)
     {
+        services.AddSingleton<MailConsumeObserver>();
+
         services.AddMassTransit(x =>
         {
             x.AddEntityFrameworkOutbox<MailDbContext>(o =>
@@ -50,6 +52,7 @@ public static class MessagingExtensions
             {
                 cfg.Host(new Uri(rabbitConn));
                 cfg.UseRawJsonDeserializer(RawSerializerOptions.AnyMessageType);
+                cfg.ConnectConsumeObserver(context.GetRequiredService<MailConsumeObserver>());
 
                 cfg.ReceiveEndpoint("mail.bulk.resolve", e =>
                 {

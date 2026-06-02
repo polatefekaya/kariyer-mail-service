@@ -35,12 +35,14 @@ internal sealed class AccountApprovedConsumer : IConsumer<AccountApprovedEvent>
         AccountApprovedEvent message = context.Message;
 
         using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ProcessAccountApprovedEvent");
+        activity?.SetTag("mail.event_type", "account.approved");
         activity?.SetTag("account.uid", message.Uid);
         activity?.SetTag("message.id", message.MessageId);
 
         _logger.LogInformation("Processing Account Approved event for {FullName} [{Uid}]", message.FullName, message.Uid);
 
         string slug = _templateSettings.AccountApprovedTemplateSlug;
+        activity?.SetTag("mail.template_slug", slug);
         if (string.IsNullOrWhiteSpace(slug))
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
@@ -51,6 +53,7 @@ internal sealed class AccountApprovedConsumer : IConsumer<AccountApprovedEvent>
 
         if (template == null)
         {
+            DiagnosticsConfig.TemplateNotFoundCounter.Add(1, new KeyValuePair<string, object?>("slug", slug));
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
             throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot send Account Approved email to {message.Email}.");
         }

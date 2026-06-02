@@ -35,6 +35,7 @@ internal sealed class AccountEmailChangedConsumer : IConsumer<AccountEmailChange
         AccountEmailChangedEvent message = context.Message;
 
         using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ProcessAccountEmailChangedEvent");
+        activity?.SetTag("mail.event_type", "account.email_changed");
         activity?.SetTag("user.uid", message.Uid);
         activity?.SetTag("message.id", message.MessageId);
 
@@ -42,6 +43,7 @@ internal sealed class AccountEmailChangedConsumer : IConsumer<AccountEmailChange
             message.Uid, message.OldEmail, message.NewEmail);
 
         string slug = _templateSettings.AccountEmailChangedTemplateSlug;
+        activity?.SetTag("mail.template_slug", slug);
         if (string.IsNullOrWhiteSpace(slug))
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
@@ -52,6 +54,7 @@ internal sealed class AccountEmailChangedConsumer : IConsumer<AccountEmailChange
 
         if (template == null)
         {
+            DiagnosticsConfig.TemplateNotFoundCounter.Add(1, new KeyValuePair<string, object?>("slug", slug));
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
             throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot send Account Email Changed email to {message.NewEmail}.");
         }

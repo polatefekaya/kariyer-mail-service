@@ -35,12 +35,14 @@ internal sealed class AccountCompletedConsumer : IConsumer<AccountCompletedEvent
         AccountCompletedEvent message = context.Message;
 
         using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ProcessAccountCompletedEvent");
+        activity?.SetTag("mail.event_type", "account.completed");
         activity?.SetTag("user.uid", message.Uid);
         activity?.SetTag("message.id", message.MessageId);
 
         _logger.LogInformation("Processing Account Completed event for {Email} [{Uid}]", message.Email, message.Uid);
 
         string slug = _templateSettings.AccountCompletedTemplateSlug;
+        activity?.SetTag("mail.template_slug", slug);
         if (string.IsNullOrWhiteSpace(slug))
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
@@ -51,6 +53,7 @@ internal sealed class AccountCompletedConsumer : IConsumer<AccountCompletedEvent
 
         if (template == null)
         {
+            DiagnosticsConfig.TemplateNotFoundCounter.Add(1, new KeyValuePair<string, object?>("slug", slug));
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
             throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot send Account Completed email to {message.Email}.");
         }

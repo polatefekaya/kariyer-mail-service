@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,34 +8,40 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<GlobalExceptionHandler> _logger;
 
-    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
-    {
-        _logger = logger;
-    }
+    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) => _logger = logger;
 
     public async ValueTask<bool> TryHandleAsync(
-        HttpContext httpContext, 
-        Exception exception, 
+        HttpContext httpContext,
+        Exception exception,
         CancellationToken cancellationToken)
     {
-        _logger.LogError(exception, "An unhandled exception occurred during the request.");
+        _logger.LogError(exception, "Unhandled exception on {Method} {Path}",
+            httpContext.Request.Method, httpContext.Request.Path);
 
-        ProblemDetails problemDetails = new ProblemDetails
+        Activity? activity = Activity.Current;
+        activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+        activity?.AddException(exception);
+
+        int statusCode = exception is InvalidOperationException
+            ? StatusCodes.Status400BadRequest
+            : StatusCodes.Status500InternalServerError;
+
+        ProblemDetails problemDetails = new()
         {
-            Status = StatusCodes.Status500InternalServerError,
-            Title = "Server Error",
+            Status = statusCode,
+            Title = exception is InvalidOperationException ? "Invalid Operation" : "Server Error",
             Type = "https://datatracker.ietf.org/doc/html/rfc7807#section-3.1",
-            Detail = "An unexpected error occurred processing your request. The issue has been logged."
+            Detail = exception is InvalidOperationException
+                ? exception.Message
+                : "An unexpected error occurred. The issue has been logged.",
         };
 
-        if (exception is InvalidOperationException)
+        if (activity is not null)
         {
-            problemDetails.Status = StatusCodes.Status400BadRequest;
-            problemDetails.Title = "Invalid Operation";
-            problemDetails.Detail = exception.Message;
+            problemDetails.Extensions["traceId"] = activity.TraceId.ToHexString();
         }
 
-        httpContext.Response.StatusCode = problemDetails.Status.Value;
+        httpContext.Response.StatusCode = statusCode;
         await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
 
         return true;

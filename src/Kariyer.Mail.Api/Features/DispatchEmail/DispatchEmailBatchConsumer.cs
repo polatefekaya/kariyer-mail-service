@@ -35,47 +35,53 @@ internal sealed class DispatchEmailConsumer : IConsumer<DispatchEmailCommand>
     {
         DispatchEmailCommand cmd = context.Message;
 
-        using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("ProcessSingleDispatch");
-        activity?.SetTag("target.id", cmd.TargetId.ToString());
-        if (cmd.JobId.HasValue) activity?.SetTag("job.id", cmd.JobId.Value.ToString());
-
         IEmailProvider provider = _providerFactory.GetActiveProvider();
-        string providerName = provider.GetType().Name;
-        activity?.SetTag("provider.name", providerName);
+        string providerName = provider.GetType().Name.Replace("EmailProvider", "").ToLowerInvariant();
 
+        using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity(
+            "mail.dispatch", ActivityKind.Consumer);
+        activity?.SetTag("mail.target_id", cmd.TargetId.ToString());
+        activity?.SetTag("mail.has_job", cmd.JobId.HasValue);
+        activity?.SetTag("mail.provider", providerName);
+        activity?.SetTag("mail.recipient_type", cmd.JobId.HasValue ? "bulk" : "transactional");
+        if (cmd.JobId.HasValue) activity?.SetTag("mail.job_id", cmd.JobId.Value.ToString());
+
+        // Check kill switch before doing any work
         if (cmd.JobId.HasValue)
         {
             IDatabase garnet = _multiplexer.GetDatabase();
             RedisValue isCancelled = await garnet.StringGetAsync($"job:cancelled:{cmd.JobId.Value}");
-            
+
             if (isCancelled.HasValue)
             {
-                _logger.LogWarning("Job [{JobId}] detected as Cancelled in Garnet. Halting target [{TargetId}].", cmd.JobId.Value, cmd.TargetId);
-                await UpdateTargetStatusAsync(cmd.TargetId, TargetStatus.Cancelled, "Job cancelled via Garnet kill switch.", context.CancellationToken);
+                activity?.SetTag("mail.status", "cancelled");
+                _logger.LogWarning(
+                    "Job [{JobId}] cancelled via kill switch. Halting target [{TargetId}].",
+                    cmd.JobId.Value, cmd.TargetId);
+                await UpdateTargetStatusAsync(cmd.TargetId, TargetStatus.Cancelled,
+                    "Job cancelled via Garnet kill switch.", context.CancellationToken);
                 return;
             }
         }
 
         Template compiledSubject = Template.Parse(cmd.Subject);
         Template compiledBody = Template.Parse(cmd.RawTemplate);
-        
+
         string finalSubject = cmd.Subject;
         string finalBody = cmd.RawTemplate;
 
-        if (cmd.TemplateData != null && cmd.TemplateData.Count > 0)
+        if (cmd.TemplateData is { Count: > 0 })
         {
-            ScriptObject scriptObject = new ();
+            ScriptObject scriptObject = new();
             scriptObject.Import(cmd.TemplateData);
-        
+
             TemplateContext templateContext = new()
             {
                 MemberRenamer = member => member.Name,
-                MemberFilter = null, 
-                StrictVariables = false 
+                StrictVariables = false
             };
-            
             templateContext.PushGlobal(scriptObject);
-        
+
             finalSubject = await compiledSubject.RenderAsync(templateContext);
             finalBody = await compiledBody.RenderAsync(templateContext);
         }
@@ -86,19 +92,36 @@ internal sealed class DispatchEmailConsumer : IConsumer<DispatchEmailCommand>
         try
         {
             await provider.SendEmailAsync(cmd.Email, finalSubject, finalBody, context.CancellationToken);
-            
+
             finalStatus = TargetStatus.Sent;
-            
-            DiagnosticsConfig.EmailsSentCounter.Add(1, new KeyValuePair<string, object?>("provider", providerName));
-            _logger.LogDebug("Successfully dispatched email to {Email} for Target [{TargetId}]", cmd.Email, cmd.TargetId);
+            activity?.SetTag("mail.status", "sent");
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            DiagnosticsConfig.EmailsSentCounter.Add(1,
+                new KeyValuePair<string, object?>("provider", providerName),
+                new KeyValuePair<string, object?>("recipient_type", cmd.JobId.HasValue ? "bulk" : "transactional"));
+
+            _logger.LogInformation(
+                "Dispatched email via {Provider} for Target [{TargetId}] (Job: {JobId})",
+                providerName, cmd.TargetId, cmd.JobId?.ToString() ?? "none");
         }
         catch (Exception ex)
         {
             finalStatus = TargetStatus.Failed;
             errorMessage = ex.Message;
-            
-            DiagnosticsConfig.EmailsFailedCounter.Add(1, new KeyValuePair<string, object?>("provider", providerName));
-            _logger.LogError(ex, "Failed to dispatch email to {Email} for Target [{TargetId}]", cmd.Email, cmd.TargetId);
+
+            activity?.SetTag("mail.status", "failed");
+            activity?.SetTag("mail.error", ex.Message);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddException(ex);
+
+            DiagnosticsConfig.EmailsFailedCounter.Add(1,
+                new KeyValuePair<string, object?>("provider", providerName),
+                new KeyValuePair<string, object?>("exception_type", ex.GetType().Name));
+
+            _logger.LogError(ex,
+                "Failed to dispatch email via {Provider} for Target [{TargetId}] (Job: {JobId})",
+                providerName, cmd.TargetId, cmd.JobId?.ToString() ?? "none");
         }
 
         if (cmd.JobId.HasValue)
@@ -126,14 +149,15 @@ internal sealed class DispatchEmailConsumer : IConsumer<DispatchEmailCommand>
                     .SetProperty(t => t.ErrorMessage, error), ct);
 
             dbActivity?.SetStatus(ActivityStatusCode.Ok);
-            _logger.LogDebug("Updated Target [{TargetId}] to {Status} in {ElapsedMs}ms", 
-                targetId, status.ToString(), Stopwatch.GetElapsedTime(startTs).TotalMilliseconds);
+            _logger.LogDebug("Updated Target [{TargetId}] → {Status} in {ElapsedMs}ms",
+                targetId, status, Stopwatch.GetElapsedTime(startTs).TotalMilliseconds);
         }
         catch (Exception ex)
         {
             dbActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            _logger.LogError(ex, "Catastrophic failure updating database for Target [{TargetId}].", targetId);
-            throw; 
+            dbActivity?.AddException(ex);
+            _logger.LogError(ex, "DB failure updating Target [{TargetId}] to {Status}.", targetId, status);
+            throw;
         }
     }
 }
