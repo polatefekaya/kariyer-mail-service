@@ -74,6 +74,13 @@ public static class ObservabilityExtensions
         builder.Logging.SetMinimumLevel(LogLevel.Trace);
         builder.Logging.AddSerilog(Log.Logger, dispose: true);
 
+        // UseSerilogRequestLogging() depends on DiagnosticContext which is normally
+        // registered by builder.Host.UseSerilog(). Since we use AddSerilog() instead
+        // (to keep the OTel logging provider alive), we register them manually here.
+        builder.Services.AddSingleton<Serilog.Extensions.Hosting.DiagnosticContext>();
+        builder.Services.AddSingleton<Serilog.IDiagnosticContext>(sp =>
+            sp.GetRequiredService<Serilog.Extensions.Hosting.DiagnosticContext>());
+
         // ── OTel logs → SigNoz via OTLP ─────────────────────────────────────────
         builder.Logging.AddOpenTelemetry(opts =>
         {
