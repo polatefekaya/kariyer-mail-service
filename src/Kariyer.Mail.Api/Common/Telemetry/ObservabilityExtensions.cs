@@ -52,8 +52,11 @@ public static class ObservabilityExtensions
                 outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {TraceId} {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
 
-        // Do NOT use UseSerilog() — it strips every other ILoggerProvider including OTel
+        // Do NOT use UseSerilog() — it strips every other ILoggerProvider including OTel.
+        // SetMinimumLevel(Trace) disables the ILoggingBuilder pre-filter so every message
+        // reaches Serilog and OTel. Each provider then applies its own level rules.
         builder.Logging.ClearProviders();
+        builder.Logging.SetMinimumLevel(LogLevel.Trace);
         builder.Logging.AddSerilog(Log.Logger, dispose: true);
 
         // ── OTel logs → SigNoz via OTLP ─────────────────────────────────────────
@@ -65,6 +68,9 @@ public static class ObservabilityExtensions
             opts.SetResourceBuilder(resource);
             opts.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
         });
+
+        // SigNoz gets Information+ only — no need to flood it with Debug/Trace
+        builder.Logging.AddFilter<OpenTelemetry.Logs.OpenTelemetryLoggerProvider>(null, LogLevel.Information);
 
         // ── OTel traces + metrics → SigNoz via OTLP ─────────────────────────────
         builder.Services.AddOpenTelemetry()
