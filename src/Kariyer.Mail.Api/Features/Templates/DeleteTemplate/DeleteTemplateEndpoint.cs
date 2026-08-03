@@ -65,8 +65,7 @@ internal sealed class DeleteTemplateEndpoint : IEndpoint
                 return Results.NotFound(new { Message = "Template not found." });
             }
 
-            await garnet.KeyDeleteAsync("templates:all:archived_false");
-            await garnet.KeyDeleteAsync("templates:all:archived_true");
+            await TemplateCacheKeys.InvalidateListsAsync(garnet);
             await templateService.InvalidateAsync(id, guards.Slug);
 
             logger.LogInformation("Template [{TemplateId}] successfully hard-deleted.", id);

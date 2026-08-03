@@ -60,8 +60,7 @@ internal sealed class BulkDeleteTemplatesEndpoint : IEndpoint
             if (deletedCount > 0)
             {
                 IDatabase garnet = multiplexer.GetDatabase();
-                await garnet.KeyDeleteAsync("templates:all:archived_false");
-                await garnet.KeyDeleteAsync("templates:all:archived_true");
+                await TemplateCacheKeys.InvalidateListsAsync(garnet);
                 await Task.WhenAll(toDeleteMeta.Select(m => templateService.InvalidateAsync(m.Id, m.Slug)));
             }
 

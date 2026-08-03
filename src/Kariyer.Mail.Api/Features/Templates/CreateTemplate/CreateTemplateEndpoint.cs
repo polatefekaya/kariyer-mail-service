@@ -16,25 +16,38 @@ internal sealed class CreateTemplateEndpoint : IEndpoint
             CreateTemplateRequest request,
             MailDbContext dbContext,
             IConnectionMultiplexer multiplexer,
+            ITemplateContextResolver contextResolver,
             ILogger<CreateTemplateEndpoint> logger,
             CancellationToken ct) =>
         {
             using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("CreateTemplate");
 
-            EmailTemplate template = new(request.Name, request.SubjectTemplate, request.HtmlContent);
-            
+            // Context only selects the vocabulary used for unknown-variable warnings — it is not
+            // persisted. A template's real context is derived from its slug once it is slot-bound.
+            string context = request.Context ?? TemplateContextRegistry.BulkEmailContext;
+            activity?.SetTag("template.context", context);
+
+            if (!TemplateContentValidator.TryPrepare(
+                    request.SubjectTemplate, request.HtmlContent, context, contextResolver,
+                    out PreparedTemplateContent prepared, out IResult? error))
+            {
+                logger.LogWarning("Create rejected: template content has Scriban syntax errors.");
+                return error!;
+            }
+
+            EmailTemplate template = new(request.Name, prepared.Subject, prepared.Html);
+
             await dbContext.EmailTemplates.AddAsync(template, ct);
             await dbContext.SaveChangesAsync(ct);
-            
+
             activity?.SetTag("template.id", template.Id.ToString());
-            
+
             IDatabase garnet = multiplexer.GetDatabase();
-            await garnet.KeyDeleteAsync("templates:all:archived_false");
-            await garnet.KeyDeleteAsync("templates:all:archived_true");
-            
+            await TemplateCacheKeys.InvalidateListsAsync(garnet);
+
             logger.LogInformation("Created new Template [{TemplateId}] with Name: '{TemplateName}'.", template.Id, template.Name);
 
-            return Results.Ok(new { TemplateId = template.Id });
+            return Results.Ok(new { TemplateId = template.Id, Warnings = prepared.Warnings });
         })
         .AddEndpointFilter<ValidationFilter<CreateTemplateRequest>>()
         .WithTags("Templates");

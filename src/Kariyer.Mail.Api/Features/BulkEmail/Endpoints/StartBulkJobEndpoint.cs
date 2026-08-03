@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Kariyer.Mail.Api.Common.Models;
 using Kariyer.Mail.Api.Common.Persistence;
 using Kariyer.Mail.Api.Common.Telemetry;
+using Kariyer.Mail.Api.Common.Templating;
 using Kariyer.Mail.Api.Common.Web;
 using Kariyer.Mail.Api.Features.BulkEmail.Contracts;
 using MassTransit;
@@ -52,7 +53,15 @@ internal sealed class StartBulkJobEndpoint : IEndpoint
 
             try
             {
-                EmailJob job = new(adminId, request.JobType, request.TemplateId, request.Subject, request.BodyTemplate, request.Filters);
+                // Free-text subject/body come straight from the admin's WYSIWYG editor, so repair
+                // any HTML-encoded Scriban delimiters before they are persisted and fanned out.
+                EmailJob job = new(
+                    adminId,
+                    request.JobType,
+                    request.TemplateId,
+                    request.Subject is null ? null : ScribanContentNormalizer.Normalize(request.Subject),
+                    request.BodyTemplate is null ? null : ScribanContentNormalizer.Normalize(request.BodyTemplate),
+                    request.Filters);
                 await dbContext.EmailJobs.AddAsync(job, ct);
                 
                 activity?.SetTag("job.id", job.Id.ToString());

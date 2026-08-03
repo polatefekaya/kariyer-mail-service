@@ -13,6 +13,7 @@ internal sealed class GetTemplateEndpoint : IEndpoint
         app.MapGet("templates/{id:ulid}", async (
             Ulid id,
             ITemplateResolutionService templateService,
+            ITemplateContextResolver contextResolver,
             ILogger<GetTemplateEndpoint> logger,
             CancellationToken ct) =>
         {
@@ -21,7 +22,7 @@ internal sealed class GetTemplateEndpoint : IEndpoint
 
             EmailTemplate? template = await templateService.GetTemplateAsync(id, ct);
 
-            if (template == null) 
+            if (template == null)
             {
                 logger.LogWarning("Fetch failed: Template [{TemplateId}] not found.", id);
                 return Results.NotFound();
@@ -35,6 +36,7 @@ internal sealed class GetTemplateEndpoint : IEndpoint
                 template.IsArchived,
                 template.IsSystemTemplate,
                 template.Slug,
+                contextResolver.ResolveContext(template.Slug),
                 template.CreatedAt,
                 template.UpdatedAt);
 

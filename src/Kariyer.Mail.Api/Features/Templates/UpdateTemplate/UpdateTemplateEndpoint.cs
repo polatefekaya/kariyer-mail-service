@@ -19,6 +19,7 @@ internal sealed class UpdateTemplateEndpoint : IEndpoint
             MailDbContext dbContext,
             IConnectionMultiplexer multiplexer,
             ITemplateResolutionService templateService,
+            ITemplateContextResolver contextResolver,
             ILogger<UpdateTemplateEndpoint> logger,
             CancellationToken ct) =>
         {
@@ -55,17 +56,31 @@ internal sealed class UpdateTemplateEndpoint : IEndpoint
             }
 
             string? slug = template.Slug;
-            template.Update(request.Name, request.SubjectTemplate, request.HtmlContent);
+
+            // The context is whatever slot this template is bound to — that is what decides which
+            // variables are legal in it, which is exactly what the old shared editor got wrong.
+            string context = contextResolver.ResolveContext(slug);
+            activity?.SetTag("template.context", context);
+
+            if (!TemplateContentValidator.TryPrepare(
+                    request.SubjectTemplate, request.HtmlContent, context, contextResolver,
+                    out PreparedTemplateContent prepared, out IResult? error))
+            {
+                logger.LogWarning("Update rejected: Template [{TemplateId}] content has Scriban syntax errors.", id);
+                return error!;
+            }
+
+            template.Update(request.Name, prepared.Subject, prepared.Html);
 
             await dbContext.SaveChangesAsync(ct);
 
-            await garnet.KeyDeleteAsync("templates:all:archived_false");
-            await garnet.KeyDeleteAsync("templates:all:archived_true");
+            await TemplateCacheKeys.InvalidateListsAsync(garnet);
             await templateService.InvalidateAsync(id, slug);
 
             logger.LogInformation("Template [{TemplateId}] successfully updated and caches invalidated.", id);
 
-            return Results.NoContent();
+            // 200 rather than 204 so unknown-variable warnings can ride along on a successful save.
+            return Results.Ok(new { Context = context, Warnings = prepared.Warnings });
         })
         .AddEndpointFilter<ValidationFilter<UpdateTemplateRequest>>()
         .WithTags("Templates");
