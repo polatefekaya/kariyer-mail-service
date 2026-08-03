@@ -6,6 +6,9 @@
   <OpenApiGenerateDocumentsOptions>--document-name v1</OpenApiGenerateDocumentsOptions>
 </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Kariyer.Mail.Api.UnitTests" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="AWSSDK.SimpleEmailV2" />
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />

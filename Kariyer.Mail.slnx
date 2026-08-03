@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Kariyer.Mail.Api/Kariyer.Mail.Api.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Kariyer.Mail.Api.UnitTests/Kariyer.Mail.Api.UnitTests.csproj" />
+  </Folder>
 </Solution>

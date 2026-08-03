@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Kariyer.Mail.Api.Common.Models;
 using Kariyer.Mail.Api.Common.Persistence;
 using Kariyer.Mail.Api.Common.Telemetry;
+using Kariyer.Mail.Api.Common.Templating;
 using Kariyer.Mail.Api.Common.Web;
 using Kariyer.Mail.Api.Features.DispatchEmail;
 using Kariyer.Mail.Api.Features.TransactionalEmail.Contracts;
@@ -51,8 +52,9 @@ internal sealed class SendSingleEmailEndpoint : IEndpoint
                 return Results.Conflict(new { Message = "Duplicate request detected and blocked." });
             }
 
-            string finalSubject = request.Subject ?? string.Empty;
-            string finalBody = request.BodyTemplate ?? string.Empty;
+            // Caller-supplied content may carry WYSIWYG-encoded delimiters; repair before storing.
+            string finalSubject = ScribanContentNormalizer.Normalize(request.Subject);
+            string finalBody = ScribanContentNormalizer.Normalize(request.BodyTemplate);
             string? templateSlug = null;
 
             if (request.TemplateId.HasValue)

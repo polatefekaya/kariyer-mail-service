@@ -16,15 +16,18 @@ internal sealed class GetAllTemplatesEndpoint : IEndpoint
     {
         app.MapGet("templates", async (
             bool? includeArchived,
+            string? context,
             MailDbContext dbContext,
             IConnectionMultiplexer multiplexer,
+            ITemplateContextResolver contextResolver,
             ILogger<GetAllTemplatesEndpoint> logger,
             CancellationToken ct) =>
         {
             using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("GetAllTemplates");
-            
-            string cacheKey = $"templates:all:archived_{(includeArchived ?? false).ToString().ToLowerInvariant()}";
+
+            string cacheKey = TemplateCacheKeys.AllTemplates(includeArchived ?? false);
             activity?.SetTag("cache.key", cacheKey);
+            activity?.SetTag("templates.context_filter", context ?? "none");
 
             IDatabase garnet = multiplexer.GetDatabase();
 
@@ -32,10 +35,10 @@ internal sealed class GetAllTemplatesEndpoint : IEndpoint
             if (cachedData.HasValue)
             {
                 List<TemplateSummaryDto>? cachedTemplates = JsonSerializer.Deserialize<List<TemplateSummaryDto>>(cachedData.ToString());
-                if (cachedTemplates != null) 
+                if (cachedTemplates != null)
                 {
                     logger.LogDebug("Cache HIT for {CacheKey}. Returning {Count} templates.", cacheKey, cachedTemplates.Count);
-                    return Results.Ok(cachedTemplates);
+                    return Results.Ok(FilterByContext(cachedTemplates, context));
                 }
             }
 
@@ -47,9 +50,12 @@ internal sealed class GetAllTemplatesEndpoint : IEndpoint
                 query = query.Where(t => !t.IsArchived);
             }
 
-            List<TemplateSummaryDto> templates = await query
+            // Project the raw columns first: ResolveContext is a dictionary lookup and cannot be
+            // translated to SQL, so the DTO has to be built after materialisation.
+            var rows = await query
                 .OrderByDescending(e => e.CreatedAt)
-                .Select(e => new TemplateSummaryDto(
+                .Select(e => new
+                {
                     e.Id,
                     e.Name,
                     e.IsArchived,
@@ -57,16 +63,34 @@ internal sealed class GetAllTemplatesEndpoint : IEndpoint
                     e.Slug,
                     e.CreatedAt,
                     e.UpdatedAt
-                ))
+                })
                 .ToListAsync(ct);
-                
+
+            List<TemplateSummaryDto> templates = rows
+                .Select(e => new TemplateSummaryDto(
+                    e.Id,
+                    e.Name,
+                    e.IsArchived,
+                    e.IsSystemTemplate,
+                    e.Slug,
+                    contextResolver.ResolveContext(e.Slug),
+                    e.CreatedAt,
+                    e.UpdatedAt))
+                .ToList();
+
             string serializedData = JsonSerializer.Serialize(templates);
             await garnet.StringSetAsync(cacheKey, serializedData, TimeSpan.FromHours(1));
 
             logger.LogInformation("Fetched {Count} templates from database and updated Garnet cache.", templates.Count);
 
-            return Results.Ok(templates);
+            return Results.Ok(FilterByContext(templates, context));
         })
         .WithTags("Templates");
     }
+
+    // Applied after the cache read so the cached blob stays keyed on includeArchived alone.
+    private static List<TemplateSummaryDto> FilterByContext(List<TemplateSummaryDto> templates, string? context) =>
+        string.IsNullOrWhiteSpace(context)
+            ? templates
+            : templates.Where(t => string.Equals(t.Context, context, StringComparison.Ordinal)).ToList();
 }

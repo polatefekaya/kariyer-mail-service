@@ -62,8 +62,7 @@ internal sealed class ArchiveTemplateEndpoint : IEndpoint
                 return Results.NotFound(new { Message = "Template not found or already archived." });
             }
 
-            await garnet.KeyDeleteAsync("templates:all:archived_false");
-            await garnet.KeyDeleteAsync("templates:all:archived_true");
+            await TemplateCacheKeys.InvalidateListsAsync(garnet);
             await garnet.KeyDeleteAsync($"template:detail:{id}");
             if (!string.IsNullOrWhiteSpace(guards.Slug))
                 await garnet.KeyDeleteAsync($"template:slug:{guards.Slug}");

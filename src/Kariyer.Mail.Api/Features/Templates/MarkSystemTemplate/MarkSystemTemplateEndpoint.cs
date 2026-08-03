@@ -58,8 +58,7 @@ internal sealed class MarkSystemTemplateEndpoint : IEndpoint
             }
 
             IDatabase garnet = multiplexer.GetDatabase();
-            await garnet.KeyDeleteAsync("templates:all:archived_false");
-            await garnet.KeyDeleteAsync("templates:all:archived_true");
+            await TemplateCacheKeys.InvalidateListsAsync(garnet);
             await garnet.KeyDeleteAsync($"template:detail:{id}");
 
             logger.LogInformation("Template [{TemplateId}] marked as system template.", id);

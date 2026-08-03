@@ -16,6 +16,7 @@ using Scalar.AspNetCore;
 using Kariyer.Mail.Api.Common.Web.Filters;
 using Kariyer.Mail.Api.Features.AdminNotifications;
 using Kariyer.Mail.Api.Features.Templates;
+using Kariyer.Mail.Api.Features.Templates.PreviewTemplate;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -33,6 +34,11 @@ builder.Services.AddProblemDetails();
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 builder.Services.Configure<EmailTemplateSettings>(
     builder.Configuration.GetSection(EmailTemplateSettings.SectionName));
+
+// Fail fast if the slot registry and the settings class have drifted apart. Silent drift here is
+// what left three slots with no placeholder vocabulary at all.
+TemplateContextResolver.AssertRegistryMatchesSettings();
+builder.Services.AddSingleton<ITemplateContextResolver, TemplateContextResolver>();
 builder.Services.Configure<RetentionSettings>(
     builder.Configuration.GetSection(RetentionSettings.SectionName));
 builder.Services.AddSingleton<TargetRetentionJob>();
@@ -72,6 +78,7 @@ builder.Services.AddDbContext<MailDbContext>(opts => opts.UseNpgsql(dbConn));
 builder.Services.AddMessaging(rabbitMqConn);
 
 builder.Services.AddScoped<ITemplateResolutionService, TemplateResolutionService>();
+builder.Services.AddSingleton<ITemplatePreviewService, TemplatePreviewService>();
 builder.Services.AddScoped<IAdminNotificationService, AdminNotificationService>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(
     ConnectionMultiplexer.Connect($"{garnetConn},abortConnect=false,connectRetry=3,connectTimeout=5000")

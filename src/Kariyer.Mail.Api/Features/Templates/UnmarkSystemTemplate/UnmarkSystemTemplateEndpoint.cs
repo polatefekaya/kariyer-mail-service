@@ -44,8 +44,7 @@ internal sealed class UnmarkSystemTemplateEndpoint : IEndpoint
             await dbContext.SaveChangesAsync(ct);
 
             IDatabase garnet = multiplexer.GetDatabase();
-            await garnet.KeyDeleteAsync("templates:all:archived_false");
-            await garnet.KeyDeleteAsync("templates:all:archived_true");
+            await TemplateCacheKeys.InvalidateListsAsync(garnet);
             await templateService.InvalidateAsync(id, oldSlug);
 
             logger.LogWarning("Template [{TemplateId}] (slug: {Slug}) unmarked as system template. Slug cleared. It is now unprotected.", id, oldSlug);

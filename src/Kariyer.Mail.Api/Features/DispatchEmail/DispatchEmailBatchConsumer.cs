@@ -3,11 +3,14 @@ using Kariyer.Mail.Api.Common.Enums;
 using Kariyer.Mail.Api.Common.Persistence;
 using Kariyer.Mail.Api.Common.Providers;
 using Kariyer.Mail.Api.Common.Telemetry;
+using Kariyer.Mail.Api.Common.Templating;
 using Kariyer.Mail.Api.Features.DispatchEmail.Providers;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Scriban;
+using Scriban.Parsing;
 using Scriban.Runtime;
+using Scriban.Syntax;
 using StackExchange.Redis;
 
 namespace Kariyer.Mail.Api.Features.DispatchEmail;
@@ -64,26 +67,39 @@ internal sealed class DispatchEmailConsumer : IConsumer<DispatchEmailCommand>
             }
         }
 
-        Template compiledSubject = Template.Parse(cmd.Subject);
-        Template compiledBody = Template.Parse(cmd.RawTemplate);
+        string finalSubject;
+        string finalBody;
 
-        string finalSubject = cmd.Subject;
-        string finalBody = cmd.RawTemplate;
-
-        if (cmd.TemplateData is { Count: > 0 })
+        try
         {
-            ScriptObject scriptObject = new();
-            scriptObject.Import(cmd.TemplateData);
+            (finalSubject, finalBody) = await RenderAsync(cmd);
+        }
+        catch (Exception ex)
+        {
+            // A template that fails to parse or render fails identically on every retry, so
+            // rethrowing would burn the retry budget and dead-letter the message while leaving the
+            // target row stuck on Pending forever. Record it as a permanent failure instead.
+            activity?.SetTag("mail.status", "render_failed");
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddException(ex);
 
-            TemplateContext templateContext = new()
+            DiagnosticsConfig.EmailsFailedCounter.Add(1,
+                new KeyValuePair<string, object?>("provider", providerName),
+                new KeyValuePair<string, object?>("exception_type", ex.GetType().Name));
+
+            _logger.LogError(ex,
+                "Template render failed for Target [{TargetId}] (Job: {JobId}). Marking as failed without retry.",
+                cmd.TargetId, cmd.JobId?.ToString() ?? "none");
+
+            if (cmd.JobId.HasValue)
             {
-                MemberRenamer = member => member.Name,
-                StrictVariables = false
-            };
-            templateContext.PushGlobal(scriptObject);
+                IDatabase statsDb = _multiplexer.GetDatabase();
+                await statsDb.StringIncrementAsync($"job:stats:{cmd.JobId.Value}:failed");
+            }
 
-            finalSubject = await compiledSubject.RenderAsync(templateContext);
-            finalBody = await compiledBody.RenderAsync(templateContext);
+            await UpdateTargetStatusAsync(cmd.TargetId, TargetStatus.Failed,
+                $"Template render failed: {ex.Message}", context.CancellationToken);
+            return;
         }
 
         TargetStatus finalStatus;
@@ -132,6 +148,63 @@ internal sealed class DispatchEmailConsumer : IConsumer<DispatchEmailCommand>
         }
 
         await UpdateTargetStatusAsync(cmd.TargetId, finalStatus, errorMessage, context.CancellationToken);
+    }
+
+    /// <summary>
+    /// Renders subject and body against the command's template data.
+    ///
+    /// Two things this deliberately does that the previous version did not. It normalises the
+    /// stored content first, because templates saved before the editor was fixed still carry
+    /// HTML-encoded Scriban delimiters. And it renders unconditionally: skipping the render when
+    /// there was no template data is what mailed people a literal <c>{{ FullName }}</c>.
+    /// </summary>
+    private async Task<(string Subject, string Body)> RenderAsync(DispatchEmailCommand cmd)
+    {
+        string subjectSource = ScribanContentNormalizer.Normalize(cmd.Subject);
+        string bodySource = ScribanContentNormalizer.Normalize(cmd.RawTemplate);
+
+        Template compiledSubject = Template.Parse(subjectSource);
+        Template compiledBody = Template.Parse(bodySource);
+
+        if (compiledSubject.HasErrors || compiledBody.HasErrors)
+        {
+            string messages = string.Join("; ",
+                compiledSubject.Messages.Concat(compiledBody.Messages).Select(m => m.ToString()));
+            throw new InvalidOperationException($"Scriban syntax error: {messages}");
+        }
+
+        ScriptObject scriptObject = new();
+        scriptObject.Import(cmd.TemplateData ?? new Dictionary<string, string>());
+
+        List<string> unresolved = [];
+
+        TemplateContext templateContext = new()
+        {
+            MemberRenamer = member => member.Name,
+            StrictVariables = false
+        };
+        templateContext.TryGetVariable = (TemplateContext _, SourceSpan _, ScriptVariable variable, out object? value) =>
+        {
+            unresolved.Add(variable.Name);
+            value = string.Empty;
+            return true;
+        };
+        templateContext.PushGlobal(scriptObject);
+
+        string subject = await compiledSubject.RenderAsync(templateContext);
+        string body = await compiledBody.RenderAsync(templateContext);
+
+        if (unresolved.Count > 0)
+        {
+            // Not fatal — this matches the old StrictVariables=false behaviour — but it used to be
+            // completely invisible, which is how templates authored against the wrong vocabulary
+            // went out blank without anyone noticing.
+            _logger.LogWarning(
+                "Target [{TargetId}] rendered with {Count} unresolved variable(s): {Variables}. They were emitted as empty strings.",
+                cmd.TargetId, unresolved.Count, string.Join(", ", unresolved.Distinct()));
+        }
+
+        return (subject, body);
     }
 
     private async Task UpdateTargetStatusAsync(Ulid targetId, TargetStatus status, string? error, CancellationToken ct)
