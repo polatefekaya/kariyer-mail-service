@@ -126,11 +126,26 @@ internal sealed class SubmitLeadEndpoint : IEndpoint
             string subject = template?.SubjectTemplate ?? $"Yeni hizmet talebi — {request.PageLabel}";
             string body = template?.HtmlContent ?? FallbackBody();
 
+            // Add every target and publish every command FIRST, then save EXACTLY ONCE.
+            //
+            // The order matters and is not stylistic. MassTransit runs an EF transactional
+            // outbox here (`AddEntityFrameworkOutbox` + `UseBusOutbox`, MessagingExtensions),
+            // so `Publish` never reaches the broker directly — it queues an outbox row that is
+            // dispatched by the NEXT `SaveChangesAsync`. Saving inside the loop therefore
+            // flushed each recipient's message on the FOLLOWING iteration and left the last one
+            // queued forever: N recipients produced N-1 emails, and a single recipient produced
+            // none at all.
+            //
+            // `EmailTarget.Id` is a Ulid assigned in the constructor, so a command can safely
+            // reference it before the row is written — which is exactly why
+            // SendSingleEmailEndpoint also publishes before it saves.
+            //
+            // One save is also the only atomic version: every target row and every queued
+            // message commits together, or nothing does.
             foreach (string recipient in recipients)
             {
                 EmailTarget target = new(null, null, recipient, subject, body);
                 dbContext.EmailTargets.Add(target);
-                await dbContext.SaveChangesAsync(ct);
 
                 DispatchEmailCommand command = new()
                 {
@@ -144,6 +159,8 @@ internal sealed class SubmitLeadEndpoint : IEndpoint
 
                 await publishEndpoint.Publish(command, ct);
             }
+
+            await dbContext.SaveChangesAsync(ct);
 
             activity?.SetTag("lead.recipient_count", recipients.Count);
             activity?.SetTag("lead.outcome", "dispatched");
