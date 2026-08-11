@@ -23,4 +23,13 @@ public sealed class EmailTemplateSettings
     public string AccountEmailChangedTemplateSlug { get; init; } = string.Empty;
     public string AccountPhoneChangedTemplateSlug { get; init; } = string.Empty;
     public string AccountUsernameChangedTemplateSlug { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Internal notification for an enquiry submitted from a public service landing page.
+    ///
+    /// Unlike every other slot here, an unconfigured slug is NOT fatal: SubmitLeadEndpoint
+    /// falls back to plain markup and logs Critical, because a misconfigured template must
+    /// never cost a sales lead.
+    /// </summary>
+    public string ServiceLeadTemplateSlug { get; init; } = string.Empty;
 }
