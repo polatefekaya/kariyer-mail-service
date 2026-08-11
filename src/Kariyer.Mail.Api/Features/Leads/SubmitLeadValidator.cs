@@ -3,7 +3,12 @@ using Kariyer.Mail.Api.Features.Leads.Contracts;
 
 namespace Kariyer.Mail.Api.Features.Leads;
 
-internal sealed class SubmitLeadValidator : AbstractValidator<SubmitLeadRequest>
+// PUBLIC, like every other validator here, and not by style preference:
+// `AddValidatorsFromAssembly` in Program.cs defaults to `includeInternalTypes: false`, so an
+// internal validator is silently skipped at registration. Nothing fails at build or at boot —
+// the endpoint just 400s on its first real request with "Unable to resolve service for type
+// IValidator<SubmitLeadRequest>", because ValidationFilter<T> cannot be constructed.
+public sealed class SubmitLeadValidator : AbstractValidator<SubmitLeadRequest>
 {
     public SubmitLeadValidator()
     {
