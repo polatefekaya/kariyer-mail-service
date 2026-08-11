@@ -14,7 +14,27 @@ public class TemplateContextRegistryTests
     [Fact]
     public void Declares_every_system_slot()
     {
-        Assert.Equal(14, TemplateContextRegistry.SystemSlots.Count);
+        Assert.Equal(15, TemplateContextRegistry.SystemSlots.Count);
+    }
+
+    [Fact]
+    public void ServiceLead_slot_matches_what_the_endpoint_supplies()
+    {
+        // ServiceLead is the only slot fed by a public HTTP endpoint rather than a bus event,
+        // so nothing else in the system would notice if its vocabulary drifted from the
+        // templateData SubmitLeadEndpoint builds — the editor would just offer variables that
+        // render empty. Keep this list identical to that dictionary.
+        Assert.True(TemplateContextRegistry.TryGetByContext("ServiceLead", out TemplateContextDefinition definition));
+
+        string[] names = definition.Placeholders.Select(p => p.Name).OrderBy(n => n).ToArray();
+
+        Assert.Equal(
+            new[]
+            {
+                "CompanyName", "Email", "FullName", "Locale", "Message",
+                "PageLabel", "PagePath", "Phone", "SubmittedAt",
+            },
+            names);
     }
 
     [Fact]

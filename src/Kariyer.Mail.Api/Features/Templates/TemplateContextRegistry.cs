@@ -177,6 +177,25 @@ internal static class TemplateContextRegistry
                 new("NewUsername", "ahmetyilmaz",  "Yeni kullanıcı adı"),
             ]),
 
+        // The only slot fed by a PUBLIC endpoint rather than by a bus event. Its vocabulary
+        // must mirror the templateData dictionary in SubmitLeadEndpoint exactly — the point of
+        // this registry is that the editor offers what the sender actually supplies.
+        new("ServiceLead",
+            "Hizmet sayfalarındaki formdan talep geldiğinde ekibe gönderilir.",
+            nameof(EmailTemplateSettings.ServiceLeadTemplateSlug),
+            s => s.ServiceLeadTemplateSlug,
+            [
+                new("FullName",    "Ahmet Yılmaz",                     "Talebi gönderen kişinin adı"),
+                new("CompanyName", "Örnek Lojistik A.Ş.",              "Şirket adı"),
+                new("Email",       "ahmet@ornek.com",                  "İletişim e-postası"),
+                new("Phone",       "+90 555 123 4567",                 "İletişim telefonu"),
+                new("Message",     "200 kişilik depo ekibi arıyoruz.", "Serbest metin mesaj (boşsa 'Belirtilmedi')"),
+                new("PageLabel",   "Fuar ve Etkinlik Personeli Temini","Talebin geldiği sayfanın adı"),
+                new("PagePath",    "/fuar-etkinlik-personeli-temini",  "Talebin geldiği sayfanın yolu"),
+                new("Locale",      "tr",                               "Formun doldurulduğu dil"),
+                new("SubmittedAt", "08.05.2026 12:00",                 "Gönderim zamanı (UTC)"),
+            ]),
+
         // Admin-sent / bulk. Mirrors ResolvedTarget.Metadata as produced by the legacy backend
         // (targetService.js resolveTargets) plus the Email key the resolver injects. Every value
         // arrives as a string — booleans are "true"/"false", dates are "yyyy-MM-dd".
@@ -211,7 +230,7 @@ internal static class TemplateContextRegistry
             ]),
     ];
 
-    /// <summary>The 14 event-triggered slots, in display order. Excludes the bulk context.</summary>
+    /// <summary>The 15 event- or form-triggered slots, in display order. Excludes the bulk context.</summary>
     public static readonly IReadOnlyList<TemplateContextDefinition> SystemSlots =
         All.Where(d => d.IsSystemSlot).ToArray();
 

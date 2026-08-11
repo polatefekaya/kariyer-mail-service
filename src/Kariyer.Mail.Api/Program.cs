@@ -14,7 +14,9 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using Scalar.AspNetCore;
 using Kariyer.Mail.Api.Common.Web.Filters;
+using System.Threading.RateLimiting;
 using Kariyer.Mail.Api.Features.AdminNotifications;
+using Kariyer.Mail.Api.Features.Leads;
 using Kariyer.Mail.Api.Features.Templates;
 using Kariyer.Mail.Api.Features.Templates.PreviewTemplate;
 using Microsoft.Extensions.Options;
@@ -103,12 +105,38 @@ builder.Services.AddCors(options =>
                 "http://localhost:3000",
                 "http://localhost:3001",
                 "http://localhost:5173",
-                "https://kz-admin.kariyerzamani.com"
+                "https://kz-admin.kariyerzamani.com",
+                // The public site, for POST /api/mail/leads. Note CORS is not an access
+                // control — it governs what a BROWSER lets script read, and curl ignores it
+                // entirely. Naming a public origin is safe here only because the lead endpoint
+                // takes a fixed schema with a server-resolved recipient; CORS is emphatically
+                // not what protects transactional/send.
+                "https://kariyerzamani.com",
+                "https://www.kariyerzamani.com"
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
     });
+});
+
+// Bounds abuse of the one publicly reachable endpoint. A named policy rather than a global
+// limiter, so the internal endpoints keep their current behaviour.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy(SubmitLeadEndpoint.RateLimitPolicy, http =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            LeadRateLimitPartition.Resolve(http),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                // Generous for a human filling in a form, useless for a flood. Someone who
+                // genuinely retries a couple of times is never affected.
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(10),
+                QueueLimit = 0,
+            }));
 });
 
 builder.Services.AddEndpoints(typeof(Program).Assembly);
@@ -150,6 +178,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 app.UseCors("MailCorsPolicy");
+app.UseRateLimiter();
 app.UseMiddleware<BaggageEnrichmentMiddleware>();
 app.UseSerilogRequestLogging();
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
