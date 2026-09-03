@@ -82,6 +82,21 @@ internal static class TemplateContextRegistry
                 new("ApprovedAt", "08.05.2026 12:00", "Onay zamanı"),
             ]),
 
+        new("JobAlertReady",
+            "Adayın çalışma tercihlerine uyan yeni ilanlar yayınlandığında gönderilir. "
+            + "E-posta ilanları listelemez; kaç yeni ilan olduğunu söyler ve İş Uyarılarım "
+            + "sayfasına yönlendirir. Yalnızca ticari elektronik ileti onayı veren adaylara "
+            + "gönderilir ve her gönderimde abonelikten çıkma bağlantısı bulunur.",
+            nameof(EmailTemplateSettings.JobAlertReadyTemplateSlug),
+            s => s.JobAlertReadyTemplateSlug,
+            [
+                new("FullName",       "Ahmet Yılmaz",                      "Alıcının tam adı"),
+                new("JobCount",       "7",                                 "Yeni eşleşen ilan sayısı"),
+                new("AlertUrl",       "https://kariyerzamani.com/is-uyarilarim", "İş Uyarılarım sayfasının bağlantısı"),
+                new("UnsubscribeUrl", "https://kariyerzamani.com/api/job_alerts/unsubscribe?token=…",
+                    "Tek tıkla abonelikten çıkma bağlantısı. ZORUNLU: şablonda mutlaka yer almalıdır."),
+            ]),
+
         new("AccountRejected",
             "Hesap başvurusu reddedildiğinde gönderilir.",
             nameof(EmailTemplateSettings.AccountRejectedTemplateSlug),

@@ -14,7 +14,7 @@ public class TemplateContextRegistryTests
     [Fact]
     public void Declares_every_system_slot()
     {
-        Assert.Equal(15, TemplateContextRegistry.SystemSlots.Count);
+        Assert.Equal(16, TemplateContextRegistry.SystemSlots.Count);
     }
 
     [Fact]
@@ -35,6 +35,31 @@ public class TemplateContextRegistryTests
                 "PageLabel", "PagePath", "Phone", "SubmittedAt",
             },
             names);
+    }
+
+    [Fact]
+    public void JobAlertReady_slot_matches_what_the_consumer_supplies()
+    {
+        // Same reasoning as ServiceLead: nothing else notices if this vocabulary drifts from
+        // the templateData JobAlertReadyConsumer builds — the editor would simply offer
+        // variables that render empty, in the one email that goes to people who opted in.
+        Assert.True(TemplateContextRegistry.TryGetByContext("JobAlertReady", out TemplateContextDefinition definition));
+
+        string[] names = definition.Placeholders.Select(p => p.Name).OrderBy(n => n).ToArray();
+
+        Assert.Equal(
+            new[] { "AlertUrl", "FullName", "JobCount", "UnsubscribeUrl" },
+            names);
+    }
+
+    [Fact]
+    public void JobAlertReady_offers_an_unsubscribe_link()
+    {
+        // This is the only standing subscription the service sends. A template authored
+        // without an unsubscribe link would be a compliance problem, so the variable has to
+        // be in the vocabulary the editor offers.
+        Assert.True(TemplateContextRegistry.TryGetByContext("JobAlertReady", out TemplateContextDefinition definition));
+        Assert.Contains(definition.Placeholders, p => p.Name == "UnsubscribeUrl");
     }
 
     [Fact]

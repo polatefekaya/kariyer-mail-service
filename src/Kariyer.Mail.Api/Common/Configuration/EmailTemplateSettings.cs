@@ -25,6 +25,14 @@ public sealed class EmailTemplateSettings
     public string AccountUsernameChangedTemplateSlug { get; init; } = string.Empty;
 
     /// <summary>
+    /// "New jobs match your preferences." The only marketing-shaped mail this service sends:
+    /// a standing subscription rather than a transactional message about the recipient's own
+    /// account, so the publisher filters on commercial-message consent and every send carries
+    /// an unsubscribe link.
+    /// </summary>
+    public string JobAlertReadyTemplateSlug { get; init; } = string.Empty;
+
+    /// <summary>
     /// Internal notification for an enquiry submitted from a public service landing page.
     ///
     /// Unlike every other slot here, an unconfigured slug is NOT fatal: SubmitLeadEndpoint
