@@ -77,9 +77,16 @@ public static class ObservabilityExtensions
         // UseSerilogRequestLogging() depends on DiagnosticContext which is normally
         // registered by builder.Host.UseSerilog(). Since we use AddSerilog() instead
         // (to keep the OTel logging provider alive), we register them manually here.
-        builder.Services.AddSingleton<Serilog.Extensions.Hosting.DiagnosticContext>();
-        builder.Services.AddSingleton<Serilog.IDiagnosticContext>(sp =>
-            sp.GetRequiredService<Serilog.Extensions.Hosting.DiagnosticContext>());
+        //
+        // Construct it here rather than registering the implementation type. DiagnosticContext's
+        // only constructor takes a Serilog.ILogger, and AddSingleton<DiagnosticContext>() asks DI
+        // to supply one -- but AddSerilog() registers the ILoggerProvider, never Serilog.ILogger
+        // itself. That threw at ApplicationBuilder.Build() (UseSerilogRequestLogging resolves the
+        // middleware), so the API crashed on boot in every environment. Passing Log.Logger
+        // explicitly keeps DI out of a dependency it was never given.
+        var diagnosticContext = new Serilog.Extensions.Hosting.DiagnosticContext(Log.Logger);
+        builder.Services.AddSingleton(diagnosticContext);
+        builder.Services.AddSingleton<Serilog.IDiagnosticContext>(diagnosticContext);
 
         // ── OTel logs → SigNoz via OTLP ─────────────────────────────────────────
         builder.Logging.AddOpenTelemetry(opts =>
