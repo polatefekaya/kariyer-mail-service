@@ -9,13 +9,13 @@ services:
     container_name: kariyer-garnet
     restart: unless-stopped
     ports:
-      - "6380:6379" # Maps Host 6380 to Container 6379
+      - "127.0.0.1:6380:6379" # Bound to localhost to prevent external access
     volumes:
       - garnet_data:/data
     command: ["--aof"]
 
   # ==========================================
-  # 2. .NET 10 MAIL MICROSERVICE
+  # 2. .NET MAIL MICROSERVICE (Host Network)
   # ==========================================
   mail-api:
     build:
@@ -25,12 +25,13 @@ services:
         GITHUB_USER: ${GITHUB_USER}
         GITHUB_TOKEN: ${GITHUB_TOKEN}
     container_name: kariyer-mail-api
-    network_mode: host # Crucial so it can find your bare-metal Postgres & RabbitMQ on 127.0.0.1
+    network_mode: host # App runs directly on host network to reach local Postgres/RabbitMQ
     restart: unless-stopped
     depends_on:
       - garnet
     env_file:
       - .env
+
 
 volumes:
   garnet_data:
