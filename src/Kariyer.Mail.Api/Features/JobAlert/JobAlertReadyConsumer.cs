@@ -67,12 +67,24 @@ internal sealed class JobAlertReadyConsumer : IConsumer<JobAlertReadyEvent>
             return;
         }
 
-        string slug = _templateSettings.JobAlertReadyTemplateSlug;
+        string slot = JobAlertSlots.Resolve(message.Slot, out bool recognisedSlot);
+        if (!recognisedSlot)
+        {
+            _logger.LogWarning(
+                "Unrecognised job alert slot '{Slot}'; falling back to the morning template.",
+                message.Slot);
+        }
+
+        string slug = SlugFor(slot);
+
+        activity?.SetTag("job_alert.slot", slot);
         activity?.SetTag("mail.template_slug", slug);
+
         if (string.IsNullOrWhiteSpace(slug))
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Missing Template Slug Configuration");
-            throw new InvalidOperationException("CRITICAL: JobAlertReadyTemplateSlug is missing in configuration.");
+            throw new InvalidOperationException(
+                $"CRITICAL: JobAlert template slug for slot '{slot}' is missing in configuration.");
         }
 
         EmailTemplate? template = await _templateService.GetBySlugAsync(slug, context.CancellationToken);
@@ -81,7 +93,7 @@ internal sealed class JobAlertReadyConsumer : IConsumer<JobAlertReadyEvent>
         {
             DiagnosticsConfig.TemplateNotFoundCounter.Add(1, new KeyValuePair<string, object?>("slug", slug));
             activity?.SetStatus(ActivityStatusCode.Error, "Template Not Found");
-            throw new Exception($"CRITICAL: Template with slug '{slug}' not found. Cannot send Job Alert email to {message.Email}.");
+            throw new Exception($"CRITICAL: Template with slug '{slug}' (slot '{slot}') not found. Cannot send Job Alert email to {message.Email}.");
         }
 
         Dictionary<string, string> templateData = new()
@@ -116,6 +128,15 @@ internal sealed class JobAlertReadyConsumer : IConsumer<JobAlertReadyEvent>
         await context.Publish(dispatchCommand, context.CancellationToken);
 
         activity?.SetStatus(ActivityStatusCode.Ok);
-        _logger.LogInformation("Successfully dispatched Job Alert email command for {Email}", message.Email);
+        _logger.LogInformation(
+            "Successfully dispatched Job Alert email command for {Email} in slot {Slot}",
+            message.Email, slot);
     }
+
+    private string SlugFor(string slot) => slot switch
+    {
+        JobAlertSlots.Noon => _templateSettings.JobAlertNoonTemplateSlug,
+        JobAlertSlots.Evening => _templateSettings.JobAlertEveningTemplateSlug,
+        _ => _templateSettings.JobAlertMorningTemplateSlug,
+    };
 }

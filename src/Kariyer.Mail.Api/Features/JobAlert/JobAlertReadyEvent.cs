@@ -33,6 +33,12 @@ namespace Kariyer.Mail.Api.Features.JobAlert;
 /// <param name="Email">Already decrypted by the publisher.</param>
 /// <param name="FullName">Display name, falling back to the address when there is no name.</param>
 /// <param name="JobCount">How many new matches the digest covers.</param>
+/// <param name="Slot">
+/// Which send window the digest was cut in: <c>morning</c>, <c>noon</c> or <c>evening</c> —
+/// or <c>always</c> when the publisher has every window disabled. Selects the template, so
+/// the copy can suit the hour it lands in. An unrecognised or absent value falls back to
+/// the morning template rather than failing the send.
+/// </param>
 /// <param name="AlertUrl">Absolute link to the İş Uyarılarım page.</param>
 /// <param name="UnsubscribeUrl">
 /// Absolute one-click unsubscribe link, valid without a session. NULL when the publisher
@@ -46,6 +52,7 @@ public sealed record JobAlertReadyEvent(
     string Email,
     string FullName,
     int JobCount,
+    string? Slot,
     string AlertUrl,
     string? UnsubscribeUrl,
     string GeneratedAt
