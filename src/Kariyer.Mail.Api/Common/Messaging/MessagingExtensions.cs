@@ -8,6 +8,7 @@ using Kariyer.Mail.Api.Features.Account.AccountDeletionCancelled;
 using Kariyer.Mail.Api.Features.Account.AccountFrozen;
 using Kariyer.Mail.Api.Features.BulkEmail;
 using Kariyer.Mail.Api.Features.DispatchEmail;
+using Kariyer.Mail.Api.Features.JobAlert;
 using MassTransit;
 using Microsoft.Extensions.Options;
 using Kariyer.Mail.Api.Features.Account.AdminCompanyCompleted;
@@ -47,6 +48,7 @@ public static class MessagingExtensions
             x.AddConsumer<AccountEmailChangedConsumer>();
             x.AddConsumer<AccountPhoneChangedConsumer>();
             x.AddConsumer<AccountUsernameChangedConsumer>();
+            x.AddConsumer<JobAlertReadyConsumer>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -102,6 +104,22 @@ public static class MessagingExtensions
                     e.ConfigureConsumeTopology = false;
                     e.Bind("identity.company.completed", b => b.ExchangeType = "fanout");
                     e.ConfigureConsumer<AccountCompletedConsumer>(context);
+                });
+
+                // İş Uyarıları. Bound to job.alert.ready, which kariyer_zamani_backend declares
+                // as a durable fanout and publishes to once per employee per digest run.
+                //
+                // Its own queue rather than sharing one: this is the only recurring,
+                // consent-gated mail the service sends, and a backlog of digests must not
+                // sit behind — or ahead of — account lifecycle mail somebody is waiting on.
+                cfg.ReceiveEndpoint("mail.job-alert.ready", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("job.alert.ready", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<JobAlertReadyConsumer>(context);
                 });
 
                 cfg.ReceiveEndpoint("mail.admin.company-completed", e =>

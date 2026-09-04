@@ -48,6 +48,25 @@ internal static class TemplateContextRegistry
         new("FullName", "Ahmet Yılmaz", "Alıcının tam adı"),
     ];
 
+    /// <summary>
+    /// The three send windows carry identical data — only the wording differs, which is the
+    /// entire reason they are separate slots. One list so they cannot drift from each other
+    /// or from what JobAlertReadyConsumer actually supplies.
+    ///
+    /// UnsubscribeUrl is not optional in practice: these are the only standing-subscription
+    /// emails the service sends, and a template authored without it would be a compliance
+    /// problem rather than a cosmetic one.
+    /// </summary>
+    private static readonly TemplatePlaceholder[] JobAlertPlaceholders =
+    [
+        new("FullName",       "Ahmet Yılmaz", "Alıcının tam adı"),
+        new("JobCount",       "7",            "Yeni eşleşen ilan sayısı"),
+        new("AlertUrl",       "https://kariyerzamani.com/is-uyarilarim",
+            "İş Uyarılarım sayfasının bağlantısı"),
+        new("UnsubscribeUrl", "https://kariyerzamani.com/api/job_alerts/unsubscribe?token=…",
+            "Tek tıkla abonelikten çıkma bağlantısı. ZORUNLU: şablonda mutlaka yer almalıdır."),
+    ];
+
     // The three reminder steps are the same email at different intervals — same vocabulary.
     private static readonly TemplatePlaceholder[] DidNotCompletePlaceholders =
     [
@@ -81,6 +100,24 @@ internal static class TemplateContextRegistry
                 new("FullName",   "Ahmet Yılmaz",     "Alıcının tam adı"),
                 new("ApprovedAt", "08.05.2026 12:00", "Onay zamanı"),
             ]),
+
+        new("JobAlertMorning",
+            "Sabah gönderim aralığında, adayın çalışma tercihlerine uyan yeni ilanlar için gönderilir.",
+            nameof(EmailTemplateSettings.JobAlertMorningTemplateSlug),
+            s => s.JobAlertMorningTemplateSlug,
+            JobAlertPlaceholders),
+
+        new("JobAlertNoon",
+            "Öğle gönderim aralığında, adayın çalışma tercihlerine uyan yeni ilanlar için gönderilir.",
+            nameof(EmailTemplateSettings.JobAlertNoonTemplateSlug),
+            s => s.JobAlertNoonTemplateSlug,
+            JobAlertPlaceholders),
+
+        new("JobAlertEvening",
+            "Akşam gönderim aralığında, adayın çalışma tercihlerine uyan yeni ilanlar için gönderilir.",
+            nameof(EmailTemplateSettings.JobAlertEveningTemplateSlug),
+            s => s.JobAlertEveningTemplateSlug,
+            JobAlertPlaceholders),
 
         new("AccountRejected",
             "Hesap başvurusu reddedildiğinde gönderilir.",

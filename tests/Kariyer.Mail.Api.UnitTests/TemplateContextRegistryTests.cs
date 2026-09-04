@@ -14,7 +14,7 @@ public class TemplateContextRegistryTests
     [Fact]
     public void Declares_every_system_slot()
     {
-        Assert.Equal(15, TemplateContextRegistry.SystemSlots.Count);
+        Assert.Equal(18, TemplateContextRegistry.SystemSlots.Count);
     }
 
     [Fact]
@@ -35,6 +35,55 @@ public class TemplateContextRegistryTests
                 "PageLabel", "PagePath", "Phone", "SubmittedAt",
             },
             names);
+    }
+
+    [Theory]
+    [InlineData("JobAlertMorning")]
+    [InlineData("JobAlertNoon")]
+    [InlineData("JobAlertEvening")]
+    public void JobAlert_slots_match_what_the_consumer_supplies(string context)
+    {
+        // Same reasoning as ServiceLead: nothing else notices if this vocabulary drifts from
+        // the templateData JobAlertReadyConsumer builds — the editor would simply offer
+        // variables that render empty, in the only emails that go to people who opted in.
+        Assert.True(TemplateContextRegistry.TryGetByContext(context, out TemplateContextDefinition definition));
+
+        string[] names = definition.Placeholders.Select(p => p.Name).OrderBy(n => n).ToArray();
+
+        Assert.Equal(
+            new[] { "AlertUrl", "FullName", "JobCount", "UnsubscribeUrl" },
+            names);
+    }
+
+    [Theory]
+    [InlineData("JobAlertMorning")]
+    [InlineData("JobAlertNoon")]
+    [InlineData("JobAlertEvening")]
+    public void JobAlert_slots_offer_an_unsubscribe_link(string context)
+    {
+        // These are the only standing subscriptions the service sends. A template authored
+        // without an unsubscribe link would be a compliance problem, so the variable has to
+        // be in the vocabulary the editor offers — in every window, not just one.
+        Assert.True(TemplateContextRegistry.TryGetByContext(context, out TemplateContextDefinition definition));
+        Assert.Contains(definition.Placeholders, p => p.Name == "UnsubscribeUrl");
+    }
+
+    [Fact]
+    public void JobAlert_windows_share_one_vocabulary()
+    {
+        // The windows exist so the WORDING can differ; the data does not. Three hand-copied
+        // lists would drift, and the drift would be invisible until an editor picked a
+        // variable that renders empty in one window only.
+        string[][] vocabularies = new[] { "JobAlertMorning", "JobAlertNoon", "JobAlertEvening" }
+            .Select(context =>
+            {
+                TemplateContextRegistry.TryGetByContext(context, out TemplateContextDefinition d);
+                return d.Placeholders.Select(p => p.Name).OrderBy(n => n).ToArray();
+            })
+            .ToArray();
+
+        Assert.Equal(vocabularies[0], vocabularies[1]);
+        Assert.Equal(vocabularies[0], vocabularies[2]);
     }
 
     [Fact]
