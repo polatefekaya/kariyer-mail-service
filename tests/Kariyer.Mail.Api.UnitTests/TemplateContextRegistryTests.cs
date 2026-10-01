@@ -14,7 +14,7 @@ public class TemplateContextRegistryTests
     [Fact]
     public void Declares_every_system_slot()
     {
-        Assert.Equal(18, TemplateContextRegistry.SystemSlots.Count);
+        Assert.Equal(29, TemplateContextRegistry.SystemSlots.Count);
     }
 
     [Fact]
@@ -84,6 +84,109 @@ public class TemplateContextRegistryTests
 
         Assert.Equal(vocabularies[0], vocabularies[1]);
         Assert.Equal(vocabularies[0], vocabularies[2]);
+    }
+
+    [Theory]
+    [InlineData("InterviewInvited")]
+    [InlineData("InterviewRescheduled")]
+    public void Interview_answer_slots_offer_both_links(string context)
+    {
+        // The candidate answers an invitation from the e-mail, with no session: these signed
+        // links ARE the authorisation. A template authored without them leaves the answer
+        // unreachable, and confirmation_status stuck on PENDING forever.
+        Assert.True(TemplateContextRegistry.TryGetByContext(context, out TemplateContextDefinition definition));
+
+        Assert.Contains(definition.Placeholders, p => p.Name == "AcceptUrl");
+        Assert.Contains(definition.Placeholders, p => p.Name == "DeclineUrl");
+    }
+
+    [Fact]
+    public void Cancellation_offers_no_answer_links()
+    {
+        // There is nothing left to answer, and a link that still worked would let someone
+        // confirm a meeting the company has already called off.
+        Assert.True(TemplateContextRegistry.TryGetByContext("InterviewCancelled", out TemplateContextDefinition definition));
+
+        Assert.DoesNotContain(definition.Placeholders, p => p.Name is "AcceptUrl" or "DeclineUrl");
+    }
+
+    [Fact]
+    public void Interview_slots_match_what_their_consumers_supply()
+    {
+        // Same reasoning as ServiceLead: keep these identical to the templateData dictionaries
+        // in the three consumers under Features/Recruiting.
+        string[] shared =
+        [
+            "CandidateName", "CompanyName", "Duration", "InterviewDateTime", "InterviewType",
+            "JobTitle", "Location", "LocationLabel", "Message", "TimeZone",
+        ];
+
+        Assert.Equal(
+            [.. shared.Concat(["AcceptUrl", "DeclineUrl", "InvitedByName"]).OrderBy(n => n)],
+            Vocabulary("InterviewInvited"));
+
+        Assert.Equal(
+            [.. shared.Concat(["AcceptUrl", "ChangedByName", "DeclineUrl", "PreviousDateTime"]).OrderBy(n => n)],
+            Vocabulary("InterviewRescheduled"));
+
+        Assert.Equal(
+            ["CancelledByName", "CandidateName", "CompanyName", "InterviewDateTime", "JobTitle", "Message", "TimeZone"],
+            Vocabulary("InterviewCancelled"));
+    }
+
+    [Fact]
+    public void Application_slots_match_what_their_consumers_supply()
+    {
+        // Same reasoning as ServiceLead: keep these identical to the templateData dictionaries
+        // the consumers under Features/Recruiting build — and, for the three decisions, to what
+        // ApplicationStageChangedConsumer stores on the held row.
+        Assert.Equal(
+            ["ApplicationsUrl", "CandidateName", "CompanyName", "JobTitle", "SubmittedAt"],
+            Vocabulary("ApplicationSubmitted"));
+
+        Assert.Equal(
+            ["CandidateName", "CompanyName", "IsQuickApply", "JobTitle", "ReviewUrl", "SubmittedAt"],
+            Vocabulary("ApplicationSubmitted.Company"));
+
+        Assert.Equal(
+            ["CandidateName", "CompanyName", "JobTitle", "ReviewUrl", "WithdrawnAt"],
+            Vocabulary("ApplicationWithdrawn"));
+
+        Assert.Equal(["CandidateName", "CompanyName", "JobTitle"], Vocabulary("ApplicationStage.Offer"));
+        Assert.Equal(["CandidateName", "CompanyName", "JobTitle"], Vocabulary("ApplicationStage.Hired"));
+        Assert.Equal(
+            ["AfterInterview", "CandidateName", "CompanyName", "JobTitle"],
+            Vocabulary("ApplicationStage.Rejected"));
+    }
+
+    [Theory]
+    [InlineData("InterviewAnswered.Accepted")]
+    [InlineData("InterviewAnswered.Declined")]
+    public void Interview_answer_slots_match_what_their_consumer_supplies(string context)
+    {
+        Assert.Equal(
+            [
+                "CandidateName", "CompanyName", "InterviewDateTime", "InterviewType", "JobTitle",
+                "RecipientName", "ReviewUrl", "TimeZone",
+            ],
+            Vocabulary(context));
+    }
+
+    [Theory]
+    [InlineData("InterviewAnswered.Accepted")]
+    [InlineData("InterviewAnswered.Declined")]
+    public void Interview_answer_slots_never_offer_the_candidates_links(string context)
+    {
+        // These go to the company side. The accept/decline links answer for whoever opens them,
+        // so a template here must not be able to hand a recruiter the candidate's answer.
+        Assert.DoesNotContain(Vocabulary(context), name => name is "AcceptUrl" or "DeclineUrl");
+    }
+
+    private static string[] Vocabulary(string context)
+    {
+        Assert.True(TemplateContextRegistry.TryGetByContext(context, out TemplateContextDefinition definition));
+
+        return [.. definition.Placeholders.Select(p => p.Name).OrderBy(n => n)];
     }
 
     [Fact]

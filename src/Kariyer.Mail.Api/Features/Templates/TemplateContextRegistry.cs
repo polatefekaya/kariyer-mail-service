@@ -75,6 +75,53 @@ internal static class TemplateContextRegistry
         new("ReminderStep", "2",            "Kaçıncı hatırlatma olduğu (1, 2, 3)"),
     ];
 
+    /// <summary>
+    /// What the three interview mails share. The recruiting service formats the instant in the
+    /// zone the interview was booked in before it reaches a template, so a template never does
+    /// date arithmetic — and never shows a candidate a time in the worker's zone.
+    /// </summary>
+    private static readonly TemplatePlaceholder[] InterviewPlaceholders =
+    [
+        new("CandidateName",     "Ahmet Yılmaz",             "Adayın adı soyadı"),
+        new("CompanyName",       "Kariyer Yazılım A.Ş.",     "Görüşmeyi yapan şirket"),
+        new("JobTitle",          "Frontend Developer",       "Başvurulan ilanın başlığı"),
+        new("InterviewDateTime", "2 Ekim 2026 Cuma, 14:00",  "Görüşmenin tarihi ve saati"),
+        new("TimeZone",          "Europe/Istanbul",          "Saatin ait olduğu zaman dilimi"),
+        new("Duration",          "45 dakika",                "Görüşme süresi"),
+        new("InterviewType",     "Video görüşme",            "Görüşme şekli"),
+        new("LocationLabel",     "Toplantı bağlantısı",      "Görüşme yeri alanının başlığı"),
+        new("Location",          "https://meet.google.com/…", "Toplantı bağlantısı, adres ya da telefon"),
+        new("Message",           "Görüşmede portföyünüzü konuşacağız.", "Yetkilinin adaya notu; boş olabilir"),
+    ];
+
+    /// <summary>
+    /// What a company-side interview answer mail carries. Accepted and declined share it — the
+    /// wording is the only difference, which is the entire reason they are separate slots.
+    /// </summary>
+    private static readonly TemplatePlaceholder[] InterviewAnswerPlaceholders =
+    [
+        new("RecipientName",     "Polat Kaya",               "E-postayı alan yetkilinin adı"),
+        new("CandidateName",     "Ahmet Yılmaz",             "Yanıt veren adayın adı soyadı"),
+        new("CompanyName",       "Kariyer Yazılım A.Ş.",     "Görüşmeyi yapan şirket"),
+        new("JobTitle",          "Frontend Developer",       "Başvurulan ilanın başlığı"),
+        new("InterviewDateTime", "2 Ekim 2026 Cuma, 14:00",  "Görüşmenin tarihi ve saati"),
+        new("TimeZone",          "Europe/Istanbul",          "Saatin ait olduğu zaman dilimi"),
+        new("InterviewType",     "Video görüşme",            "Görüşme şekli"),
+        new("ReviewUrl",         "https://basvuru.kariyerzamani.com/ilanlar/…",
+            "Şirket panelinde ilanın mülakatlarına giden bağlantı"),
+    ];
+
+    /// <summary>
+    /// What the three candidate-facing decision mails share. Offer and hire need nothing else;
+    /// a rejection adds whether it came after an interview, which is a different letter.
+    /// </summary>
+    private static readonly TemplatePlaceholder[] StageDecisionPlaceholders =
+    [
+        new("CandidateName", "Ahmet Yılmaz",         "Adayın adı soyadı"),
+        new("CompanyName",   "Kariyer Yazılım A.Ş.", "Başvurulan şirket"),
+        new("JobTitle",      "Frontend Developer",   "Başvurulan ilanın başlığı"),
+    ];
+
     public static readonly IReadOnlyList<TemplateContextDefinition> All =
     [
         new("AccountCreated",
@@ -214,6 +261,123 @@ internal static class TemplateContextRegistry
                 new("NewUsername", "ahmetyilmaz",  "Yeni kullanıcı adı"),
             ]),
 
+        new("InterviewInvited",
+            "Aday bir mülakata davet edildiğinde gönderilir.",
+            nameof(EmailTemplateSettings.InterviewInvitedTemplateSlug),
+            s => s.InterviewInvitedTemplateSlug,
+            [
+                .. InterviewPlaceholders,
+                new("InvitedByName", "Polat Kaya", "Daveti gönderen yetkilinin adı"),
+                new("AcceptUrl",  "https://api.kariyerzamani.com/api/recruiting/interviews/…/confirmation/accept?token=…",
+                    "Adayın katılacağını bildirdiği tek tıklık bağlantı. Yalnızca adaya gönderilir."),
+                new("DeclineUrl", "https://api.kariyerzamani.com/api/recruiting/interviews/…/confirmation/decline?token=…",
+                    "Adayın katılamayacağını bildirdiği tek tıklık bağlantı. Yalnızca adaya gönderilir."),
+            ]),
+
+        new("InterviewRescheduled",
+            "Adaya iletilmiş bir mülakatın saati, süresi ya da şekli değiştiğinde gönderilir.",
+            nameof(EmailTemplateSettings.InterviewRescheduledTemplateSlug),
+            s => s.InterviewRescheduledTemplateSlug,
+            [
+                .. InterviewPlaceholders,
+                new("PreviousDateTime", "2 Ekim 2026 Cuma, 11:00",
+                    "Değişiklikten önceki tarih ve saat. Adayın takvimindeki kaydı budur."),
+                new("ChangedByName", "Polat Kaya", "Değişikliği yapan yetkilinin adı"),
+                new("AcceptUrl",  "https://api.kariyerzamani.com/api/recruiting/interviews/…/confirmation/accept?token=…",
+                    "Yeni saat için adayın onay bağlantısı. Yalnızca adaya gönderilir."),
+                new("DeclineUrl", "https://api.kariyerzamani.com/api/recruiting/interviews/…/confirmation/decline?token=…",
+                    "Yeni saat için adayın ret bağlantısı. Yalnızca adaya gönderilir."),
+            ]),
+
+        new("InterviewCancelled",
+            "Planlanmış bir mülakat şirket tarafından iptal edildiğinde gönderilir.",
+            nameof(EmailTemplateSettings.InterviewCancelledTemplateSlug),
+            s => s.InterviewCancelledTemplateSlug,
+            [
+                new("CandidateName",     "Ahmet Yılmaz",            "Adayın adı soyadı"),
+                new("CompanyName",       "Kariyer Yazılım A.Ş.",    "Görüşmeyi iptal eden şirket"),
+                new("JobTitle",          "Frontend Developer",      "Başvurulan ilanın başlığı"),
+                new("InterviewDateTime", "2 Ekim 2026 Cuma, 14:00", "İptal edilen görüşmenin tarihi ve saati"),
+                new("TimeZone",          "Europe/Istanbul",         "Saatin ait olduğu zaman dilimi"),
+                new("Message",           "Yeni bir tarihle tekrar ulaşacağız.", "Yetkilinin adaya notu; boş olabilir"),
+                new("CancelledByName",   "Polat Kaya",              "İptali yapan yetkilinin adı"),
+            ]),
+
+        new("InterviewAnswered.Accepted",
+            "Aday mülakat davetini kabul ettiğinde şirket tarafına gönderilir.",
+            nameof(EmailTemplateSettings.InterviewAcceptedTemplateSlug),
+            s => s.InterviewAcceptedTemplateSlug,
+            InterviewAnswerPlaceholders),
+
+        new("InterviewAnswered.Declined",
+            "Aday mülakat davetini reddettiğinde şirket tarafına gönderilir.",
+            nameof(EmailTemplateSettings.InterviewDeclinedTemplateSlug),
+            s => s.InterviewDeclinedTemplateSlug,
+            InterviewAnswerPlaceholders),
+
+        new("ApplicationSubmitted",
+            "Aday bir ilana başvurduğunda adaya gönderilir.",
+            nameof(EmailTemplateSettings.ApplicationSubmittedTemplateSlug),
+            s => s.ApplicationSubmittedTemplateSlug,
+            [
+                new("CandidateName",   "Ahmet Yılmaz",         "Adayın adı soyadı"),
+                new("CompanyName",     "Kariyer Yazılım A.Ş.", "Başvurulan şirket"),
+                new("JobTitle",        "Frontend Developer",   "Başvurulan ilanın başlığı"),
+                new("SubmittedAt",     "2 Ekim 2026 Cuma, 14:00", "Başvuru zamanı"),
+                new("ApplicationsUrl", "https://kariyerzamani.com/basvurularim", "Adayın Başvurularım sayfası"),
+            ]),
+
+        new("ApplicationSubmitted.Company",
+            "Bir ilana yeni başvuru geldiğinde şirkete gönderilir.",
+            nameof(EmailTemplateSettings.ApplicationSubmittedCompanyTemplateSlug),
+            s => s.ApplicationSubmittedCompanyTemplateSlug,
+            [
+                new("CompanyName",  "Kariyer Yazılım A.Ş.", "İlanı veren şirket"),
+                new("CandidateName", "Ahmet Yılmaz",        "Başvuran adayın adı soyadı"),
+                new("JobTitle",     "Frontend Developer",   "Başvurulan ilanın başlığı"),
+                new("SubmittedAt",  "2 Ekim 2026 Cuma, 14:00", "Başvuru zamanı"),
+                new("IsQuickApply", "false",                "Hızlı başvuru mu (true/false); hızlı başvuruda ön yazı yoktur"),
+                new("ReviewUrl",    "https://basvuru.kariyerzamani.com/ilanlar/…",
+                    "Şirket panelinde ilanın başvurularına giden bağlantı"),
+            ]),
+
+        new("ApplicationWithdrawn",
+            "Aday başvurusunu geri çektiğinde şirkete gönderilir.",
+            nameof(EmailTemplateSettings.ApplicationWithdrawnTemplateSlug),
+            s => s.ApplicationWithdrawnTemplateSlug,
+            [
+                new("CompanyName",   "Kariyer Yazılım A.Ş.", "İlanı veren şirket"),
+                new("CandidateName", "Ahmet Yılmaz",         "Başvurusunu geri çeken adayın adı soyadı"),
+                new("JobTitle",      "Frontend Developer",   "Başvurulan ilanın başlığı"),
+                new("WithdrawnAt",   "2 Ekim 2026 Cuma, 14:00", "Geri çekme zamanı"),
+                new("ReviewUrl",     "https://basvuru.kariyerzamani.com/ilanlar/…",
+                    "Şirket panelinde ilanın başvurularına giden bağlantı"),
+            ]),
+
+        // The three decisions below are held before sending (PendingStageMail), so a move the
+        // recruiter undoes within the hold never reaches the candidate.
+        new("ApplicationStage.Offer",
+            "Adaya teklif verildiğinde, kısa bir bekleme süresinden sonra adaya gönderilir.",
+            nameof(EmailTemplateSettings.ApplicationOfferTemplateSlug),
+            s => s.ApplicationOfferTemplateSlug,
+            StageDecisionPlaceholders),
+
+        new("ApplicationStage.Hired",
+            "Aday işe alındı olarak işaretlendiğinde, kısa bir bekleme süresinden sonra adaya gönderilir.",
+            nameof(EmailTemplateSettings.ApplicationHiredTemplateSlug),
+            s => s.ApplicationHiredTemplateSlug,
+            StageDecisionPlaceholders),
+
+        new("ApplicationStage.Rejected",
+            "Aday reddedildiğinde, kısa bir bekleme süresinden sonra adaya gönderilir.",
+            nameof(EmailTemplateSettings.ApplicationRejectedTemplateSlug),
+            s => s.ApplicationRejectedTemplateSlug,
+            [
+                .. StageDecisionPlaceholders,
+                new("AfterInterview", "true",
+                    "Ret mülakattan sonra mı geldi (true/false); erken elemeyle mülakat sonrası ret farklı yazılır"),
+            ]),
+
         // The only slot fed by a PUBLIC endpoint rather than by a bus event. Its vocabulary
         // must mirror the templateData dictionary in SubmitLeadEndpoint exactly — the point of
         // this registry is that the editor offers what the sender actually supplies.
@@ -267,7 +431,7 @@ internal static class TemplateContextRegistry
             ]),
     ];
 
-    /// <summary>The 15 event- or form-triggered slots, in display order. Excludes the bulk context.</summary>
+    /// <summary>The event- or form-triggered slots, in display order. Excludes the bulk context.</summary>
     public static readonly IReadOnlyList<TemplateContextDefinition> SystemSlots =
         All.Where(d => d.IsSystemSlot).ToArray();
 
