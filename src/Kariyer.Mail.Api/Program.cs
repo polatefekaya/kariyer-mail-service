@@ -17,6 +17,7 @@ using Kariyer.Mail.Api.Common.Web.Filters;
 using System.Threading.RateLimiting;
 using Kariyer.Mail.Api.Features.AdminNotifications;
 using Kariyer.Mail.Api.Features.Leads;
+using Kariyer.Mail.Api.Features.Recruiting.ApplicationStageChanged;
 using Kariyer.Mail.Api.Features.Templates;
 using Kariyer.Mail.Api.Features.Templates.PreviewTemplate;
 using Microsoft.Extensions.Options;
@@ -44,6 +45,9 @@ builder.Services.AddSingleton<ITemplateContextResolver, TemplateContextResolver>
 builder.Services.Configure<RetentionSettings>(
     builder.Configuration.GetSection(RetentionSettings.SectionName));
 builder.Services.AddSingleton<TargetRetentionJob>();
+builder.Services.Configure<RecruitingMailSettings>(
+    builder.Configuration.GetSection(RecruitingMailSettings.SectionName));
+builder.Services.AddSingleton<PendingStageMailDispatchJob>();
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.Configure<LegacyBackendSettings>(builder.Configuration.GetSection("LegacySystem"));
 builder.Services.Configure<DispatcherSettings>(builder.Configuration.GetSection("Dispatcher"));
@@ -192,6 +196,12 @@ RecurringJob.AddOrUpdate<TargetRetentionJob>(
     "target-retention-cleanup",
     job => job.ExecuteAsync(CancellationToken.None),
     retentionSettings.CronExpression);
+
+var recruitingMailSettings = app.Services.GetRequiredService<IOptions<RecruitingMailSettings>>().Value;
+RecurringJob.AddOrUpdate<PendingStageMailDispatchJob>(
+    "recruiting-stage-mail-dispatch",
+    job => job.ExecuteAsync(CancellationToken.None),
+    recruitingMailSettings.DispatchCronExpression);
 app.MapPrometheusScrapingEndpoint();
 //app.UseHttpsRedirection();
 

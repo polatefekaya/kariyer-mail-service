@@ -9,6 +9,13 @@ using Kariyer.Mail.Api.Features.Account.AccountFrozen;
 using Kariyer.Mail.Api.Features.BulkEmail;
 using Kariyer.Mail.Api.Features.DispatchEmail;
 using Kariyer.Mail.Api.Features.JobAlert;
+using Kariyer.Mail.Api.Features.Recruiting.ApplicationStageChanged;
+using Kariyer.Mail.Api.Features.Recruiting.ApplicationSubmitted;
+using Kariyer.Mail.Api.Features.Recruiting.ApplicationWithdrawn;
+using Kariyer.Mail.Api.Features.Recruiting.InterviewAnswered;
+using Kariyer.Mail.Api.Features.Recruiting.InterviewCancelled;
+using Kariyer.Mail.Api.Features.Recruiting.InterviewInvited;
+using Kariyer.Mail.Api.Features.Recruiting.InterviewRescheduled;
 using MassTransit;
 using Microsoft.Extensions.Options;
 using Kariyer.Mail.Api.Features.Account.AdminCompanyCompleted;
@@ -49,6 +56,13 @@ public static class MessagingExtensions
             x.AddConsumer<AccountPhoneChangedConsumer>();
             x.AddConsumer<AccountUsernameChangedConsumer>();
             x.AddConsumer<JobAlertReadyConsumer>();
+            x.AddConsumer<InterviewInvitedConsumer>();
+            x.AddConsumer<InterviewRescheduledConsumer>();
+            x.AddConsumer<InterviewCancelledConsumer>();
+            x.AddConsumer<InterviewAnsweredConsumer>();
+            x.AddConsumer<ApplicationSubmittedConsumer>();
+            x.AddConsumer<ApplicationWithdrawnConsumer>();
+            x.AddConsumer<ApplicationStageChangedConsumer>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -120,6 +134,90 @@ public static class MessagingExtensions
                     e.ConfigureConsumeTopology = false;
                     e.Bind("job.alert.ready", b => b.ExchangeType = "fanout");
                     e.ConfigureConsumer<JobAlertReadyConsumer>(context);
+                });
+
+                // Mülakat bildirimleri. kariyer-recruiting-service publishes these through its
+                // transactional outbox, so a committed invitation cannot fail to be announced.
+                //
+                // One queue each rather than one shared queue: a cancellation is the most
+                // time-critical mail this service sends — the candidate may be about to travel —
+                // and it must not wait behind a backlog of invitations.
+                cfg.ReceiveEndpoint("mail.recruiting.interview-invited", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("recruiting.interview.invited", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<InterviewInvitedConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("mail.recruiting.interview-rescheduled", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("recruiting.interview.rescheduled", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<InterviewRescheduledConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("mail.recruiting.interview-cancelled", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("recruiting.interview.cancelled", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<InterviewCancelledConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("mail.recruiting.interview-answered", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("recruiting.interview.answered", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<InterviewAnsweredConsumer>(context);
+                });
+
+                // Başvuru bildirimleri. Submitted and withdrawn are published by
+                // kariyer_zamani_backend, where applications are created and withdrawn; the
+                // stage change by kariyer-recruiting-service. Each on its own queue for the same
+                // reason as the interview mail: a burst of new applications on a popular posting
+                // must not delay a candidate's decision mail.
+                cfg.ReceiveEndpoint("mail.recruiting.application-submitted", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("recruiting.application.submitted", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<ApplicationSubmittedConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("mail.recruiting.application-withdrawn", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("recruiting.application.withdrawn", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<ApplicationWithdrawnConsumer>(context);
+                });
+
+                // Every stage move, silent ones included — a silent move is what cancels a
+                // decision mail still being held. Nothing is sent from this queue directly;
+                // PendingStageMailDispatchJob sends once the hold has passed.
+                cfg.ReceiveEndpoint("mail.recruiting.application-stage-changed", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("recruiting.application.stage_changed", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<ApplicationStageChangedConsumer>(context);
                 });
 
                 cfg.ReceiveEndpoint("mail.admin.company-completed", e =>

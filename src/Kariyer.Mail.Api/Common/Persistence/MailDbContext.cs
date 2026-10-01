@@ -12,6 +12,7 @@ internal sealed class MailDbContext : DbContext
     public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
     public DbSet<EmailJobSchedule> EmailJobSchedules => Set<EmailJobSchedule>();
     public DbSet<AdminNotificationRecipient> AdminNotificationRecipients => Set<AdminNotificationRecipient>();
+    public DbSet<PendingStageMail> PendingStageMails => Set<PendingStageMail>();
 
     public MailDbContext(DbContextOptions<MailDbContext> options) : base(options) { }
 
@@ -58,6 +59,20 @@ internal sealed class MailDbContext : DbContext
             
         modelBuilder.Entity<EmailJobSchedule>()
             .HasIndex(s => s.IsActive);
+
+        modelBuilder.Entity<PendingStageMail>(b =>
+        {
+            b.HasKey(m => m.ApplicationUid);
+            b.Property(m => m.ApplicationUid).HasMaxLength(64);
+            b.Property(m => m.MessageId).HasMaxLength(64);
+            b.Property(m => m.ToStage).HasMaxLength(32);
+            b.Property(m => m.SettingsKey).HasMaxLength(100);
+            b.Property(m => m.TemplateData).HasColumnType("jsonb");
+            b.Property(m => m.Version).IsRowVersion();
+
+            // The dispatch job's only query: what is pending and due.
+            b.HasIndex(m => new { m.Status, m.DueAt });
+        });
 
         modelBuilder.Entity<EmailJob>()
             .HasOne(j => j.Template)
