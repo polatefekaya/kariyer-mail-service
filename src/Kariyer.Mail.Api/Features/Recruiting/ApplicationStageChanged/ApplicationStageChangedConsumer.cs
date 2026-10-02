@@ -49,6 +49,14 @@ internal sealed class ApplicationStageChangedConsumer : IConsumer<ApplicationSta
         activity?.SetTag("stage.to", message.ToStage);
         activity?.SetTag("message.id", message.MessageId);
 
+        if (!_settings.StageMailsEnabled)
+        {
+            // Consumed and dropped: candidates are not told about panel decisions while this is
+            // off. See RecruitingMailSettings.StageMailsEnabled.
+            activity?.SetStatus(ActivityStatusCode.Ok, "Stage mails disabled.");
+            return;
+        }
+
         PendingStageMail? existing = await _dbContext.PendingStageMails
             .FirstOrDefaultAsync(m => m.ApplicationUid == message.ApplicationUid, context.CancellationToken);
 

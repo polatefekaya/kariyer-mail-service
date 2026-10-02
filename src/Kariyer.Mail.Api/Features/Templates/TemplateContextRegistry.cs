@@ -357,19 +357,19 @@ internal static class TemplateContextRegistry
         // The three decisions below are held before sending (PendingStageMail), so a move the
         // recruiter undoes within the hold never reaches the candidate.
         new("ApplicationStage.Offer",
-            "Adaya teklif verildiğinde, kısa bir bekleme süresinden sonra adaya gönderilir.",
+            "Adaya teklif verildiğinde, kısa bir bekleme süresinden sonra adaya gönderilir Şu an kapalı: yalnızca RecruitingMail__StageMailsEnabled=true iken gönderilir.",
             nameof(EmailTemplateSettings.ApplicationOfferTemplateSlug),
             s => s.ApplicationOfferTemplateSlug,
             StageDecisionPlaceholders),
 
         new("ApplicationStage.Hired",
-            "Aday işe alındı olarak işaretlendiğinde, kısa bir bekleme süresinden sonra adaya gönderilir.",
+            "Aday işe alındı olarak işaretlendiğinde, kısa bir bekleme süresinden sonra adaya gönderilir Şu an kapalı: yalnızca RecruitingMail__StageMailsEnabled=true iken gönderilir.",
             nameof(EmailTemplateSettings.ApplicationHiredTemplateSlug),
             s => s.ApplicationHiredTemplateSlug,
             StageDecisionPlaceholders),
 
         new("ApplicationStage.Rejected",
-            "Aday reddedildiğinde, kısa bir bekleme süresinden sonra adaya gönderilir.",
+            "Aday reddedildiğinde, kısa bir bekleme süresinden sonra adaya gönderilir Şu an kapalı: yalnızca RecruitingMail__StageMailsEnabled=true iken gönderilir.",
             nameof(EmailTemplateSettings.ApplicationRejectedTemplateSlug),
             s => s.ApplicationRejectedTemplateSlug,
             [
