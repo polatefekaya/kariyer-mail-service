@@ -10,6 +10,7 @@ using Kariyer.Mail.Api.Features.BulkEmail;
 using Kariyer.Mail.Api.Features.DispatchEmail;
 using Kariyer.Mail.Api.Features.JobAlert;
 using Kariyer.Mail.Api.Features.Recruiting.ApplicationStageChanged;
+using Kariyer.Mail.Api.Features.Recruiting.CandidatesMessaged;
 using Kariyer.Mail.Api.Features.Recruiting.ApplicationSubmitted;
 using Kariyer.Mail.Api.Features.Recruiting.ApplicationWithdrawn;
 using Kariyer.Mail.Api.Features.Recruiting.InterviewAnswered;
@@ -63,6 +64,7 @@ public static class MessagingExtensions
             x.AddConsumer<ApplicationSubmittedConsumer>();
             x.AddConsumer<ApplicationWithdrawnConsumer>();
             x.AddConsumer<ApplicationStageChangedConsumer>();
+            x.AddConsumer<CandidatesMessagedConsumer>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -210,6 +212,18 @@ public static class MessagingExtensions
                 // Every stage move, silent ones included — a silent move is what cancels a
                 // decision mail still being held. Nothing is sent from this queue directly;
                 // PendingStageMailDispatchJob sends once the hold has passed.
+                // A company's message to its applicants. Its own queue: one send can fan out to
+                // hundreds of mails and must not hold up interview or account mail.
+                cfg.ReceiveEndpoint("mail.recruiting.candidates-messaged", e =>
+                {
+                    e.UseEntityFrameworkOutbox<MailDbContext>(context);
+                    e.ApplyStandardResilience();
+
+                    e.ConfigureConsumeTopology = false;
+                    e.Bind("recruiting.candidates.messaged", b => b.ExchangeType = "fanout");
+                    e.ConfigureConsumer<CandidatesMessagedConsumer>(context);
+                });
+
                 cfg.ReceiveEndpoint("mail.recruiting.application-stage-changed", e =>
                 {
                     e.UseEntityFrameworkOutbox<MailDbContext>(context);
