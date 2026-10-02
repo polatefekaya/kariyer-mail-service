@@ -46,6 +46,14 @@ public sealed class PendingStageMailDispatchJob
     {
         using Activity? activity = DiagnosticsConfig.MailActivitySource.StartActivity("PendingStageMailDispatchJob");
 
+        if (!_settings.Value.StageMailsEnabled)
+        {
+            // Anything held from before the switch was turned off is dropped rather than left
+            // waiting: switching it back on must not flush stale decisions to candidates.
+            await CancelHeldAsync(ct);
+            return;
+        }
+
         List<string> due;
 
         using (IServiceScope scope = _scopeFactory.CreateScope())
@@ -67,6 +75,37 @@ public sealed class PendingStageMailDispatchJob
         {
             ct.ThrowIfCancellationRequested();
             await DispatchAsync(applicationUid, ct);
+        }
+    }
+
+    private async Task CancelHeldAsync(CancellationToken ct)
+    {
+        using IServiceScope scope = _scopeFactory.CreateScope();
+        MailDbContext dbContext = scope.ServiceProvider.GetRequiredService<MailDbContext>();
+
+        List<PendingStageMail> held = await dbContext.PendingStageMails
+            .Where(m => m.Status == PendingStageMailStatus.Pending)
+            .Take(_settings.Value.DispatchBatchSize)
+            .ToListAsync(ct);
+
+        if (held.Count == 0)
+        {
+            return;
+        }
+
+        foreach (PendingStageMail mail in held)
+        {
+            mail.Cancel("Stage mails are disabled (RecruitingMail:StageMailsEnabled).");
+        }
+
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            _logger.LogInformation("Cancelled {Count} held decision mail(s); stage mails are disabled.", held.Count);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // A move touched one of them meanwhile; the next run picks up whatever is left.
         }
     }
 

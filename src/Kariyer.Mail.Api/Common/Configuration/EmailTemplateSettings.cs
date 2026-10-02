@@ -89,6 +89,12 @@ public sealed class EmailTemplateSettings
     public string ApplicationRejectedTemplateSlug { get; init; } = string.Empty;
 
     /// <summary>
+    /// A company's own message to a group of its applicants ("Adaylarla iletişime geç" in the
+    /// employer portal). The template is the frame; the company's text arrives as Message.
+    /// </summary>
+    public string CandidateMessageTemplateSlug { get; init; } = string.Empty;
+
+    /// <summary>
     /// Internal notification for an enquiry submitted from a public service landing page.
     ///
     /// Unlike every other slot here, an unconfigured slug is NOT fatal: SubmitLeadEndpoint

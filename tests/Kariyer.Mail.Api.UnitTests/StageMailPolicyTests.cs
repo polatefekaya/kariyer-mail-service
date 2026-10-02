@@ -58,3 +58,14 @@ public class StageMailPolicyTests
     public void Knows_whether_a_rejection_came_after_meeting_the_company(string from, bool expected) =>
         Assert.Equal(expected, StageMailPolicy.IsAfterInterview(from));
 }
+
+public class RecruitingMailSettingsTests
+{
+    [Fact]
+    public void Decision_mails_are_off_unless_switched_on()
+    {
+        // Candidates are not told about panel decisions yet. A deployment that forgets the
+        // setting must stay silent, not start mailing rejections.
+        Assert.False(new RecruitingMailSettings().StageMailsEnabled);
+    }
+}

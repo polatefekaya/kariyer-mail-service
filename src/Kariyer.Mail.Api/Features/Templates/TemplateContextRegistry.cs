@@ -357,25 +357,39 @@ internal static class TemplateContextRegistry
         // The three decisions below are held before sending (PendingStageMail), so a move the
         // recruiter undoes within the hold never reaches the candidate.
         new("ApplicationStage.Offer",
-            "Adaya teklif verildiğinde, kısa bir bekleme süresinden sonra adaya gönderilir.",
+            "Adaya teklif verildiğinde, kısa bir bekleme süresinden sonra adaya gönderilir Şu an kapalı: yalnızca RecruitingMail__StageMailsEnabled=true iken gönderilir.",
             nameof(EmailTemplateSettings.ApplicationOfferTemplateSlug),
             s => s.ApplicationOfferTemplateSlug,
             StageDecisionPlaceholders),
 
         new("ApplicationStage.Hired",
-            "Aday işe alındı olarak işaretlendiğinde, kısa bir bekleme süresinden sonra adaya gönderilir.",
+            "Aday işe alındı olarak işaretlendiğinde, kısa bir bekleme süresinden sonra adaya gönderilir Şu an kapalı: yalnızca RecruitingMail__StageMailsEnabled=true iken gönderilir.",
             nameof(EmailTemplateSettings.ApplicationHiredTemplateSlug),
             s => s.ApplicationHiredTemplateSlug,
             StageDecisionPlaceholders),
 
         new("ApplicationStage.Rejected",
-            "Aday reddedildiğinde, kısa bir bekleme süresinden sonra adaya gönderilir.",
+            "Aday reddedildiğinde, kısa bir bekleme süresinden sonra adaya gönderilir Şu an kapalı: yalnızca RecruitingMail__StageMailsEnabled=true iken gönderilir.",
             nameof(EmailTemplateSettings.ApplicationRejectedTemplateSlug),
             s => s.ApplicationRejectedTemplateSlug,
             [
                 .. StageDecisionPlaceholders,
                 new("AfterInterview", "true",
                     "Ret mülakattan sonra mı geldi (true/false); erken elemeyle mülakat sonrası ret farklı yazılır"),
+            ]),
+
+        new("CandidateMessage",
+            "Şirket, başvuru panelinden adaylarına toplu mesaj gönderdiğinde her adaya gönderilir.",
+            nameof(EmailTemplateSettings.CandidateMessageTemplateSlug),
+            s => s.CandidateMessageTemplateSlug,
+            [
+                new("CandidateName", "Ahmet Yılmaz",         "Adayın adı soyadı"),
+                new("CompanyName",   "Kariyer Yazılım A.Ş.", "Mesajı gönderen şirket"),
+                new("JobTitle",      "Frontend Developer",   "Başvurulan ilanın başlığı"),
+                new("Subject",       "Başvurunuz hakkında",  "Şirketin yazdığı konu; boşsa ilan başlığından türetilir. E-posta konusunda kullanın."),
+                new("Message",       "Merhaba,<br>Başvurunuz için teşekkür ederiz…",
+                    "Şirketin mesajı. HTML'e güvenli biçimde çevrilmiştir; satır sonları korunur."),
+                new("SenderName",    "Polat Kaya",           "Mesajı gönderen yetkilinin adı"),
             ]),
 
         // The only slot fed by a PUBLIC endpoint rather than by a bus event. Its vocabulary

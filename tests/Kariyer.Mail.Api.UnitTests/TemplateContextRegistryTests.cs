@@ -14,7 +14,7 @@ public class TemplateContextRegistryTests
     [Fact]
     public void Declares_every_system_slot()
     {
-        Assert.Equal(29, TemplateContextRegistry.SystemSlots.Count);
+        Assert.Equal(30, TemplateContextRegistry.SystemSlots.Count);
     }
 
     [Fact]
@@ -181,6 +181,12 @@ public class TemplateContextRegistryTests
         // so a template here must not be able to hand a recruiter the candidate's answer.
         Assert.DoesNotContain(Vocabulary(context), name => name is "AcceptUrl" or "DeclineUrl");
     }
+
+    [Fact]
+    public void Candidate_message_slot_matches_what_its_consumer_supplies() =>
+        Assert.Equal(
+            ["CandidateName", "CompanyName", "JobTitle", "Message", "SenderName", "Subject"],
+            Vocabulary("CandidateMessage"));
 
     private static string[] Vocabulary(string context)
     {

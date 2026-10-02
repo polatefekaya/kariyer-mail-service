@@ -110,6 +110,14 @@ public sealed class PendingStageMail
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Dropped without a newer move — e.g. decision mails were switched off while it waited.</summary>
+    public void Cancel(string reason)
+    {
+        Status = PendingStageMailStatus.Cancelled;
+        ErrorMessage = reason;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void MarkDispatched()
     {
         Status = PendingStageMailStatus.Dispatched;
